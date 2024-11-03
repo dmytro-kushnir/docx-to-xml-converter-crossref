@@ -8,6 +8,56 @@ def parse_docx_to_paragraphs(docx_path):
     paragraphs = [para.text.strip() for para in document.paragraphs if para.text.strip()]
     return paragraphs
 
+def extract_ukrainian_title(paragraphs):
+    """Extracts the Ukrainian title, which is the paragraph after the one containing 'УДК'."""
+    ukrainian_title = "Ukrainian title not found."
+
+    for i, paragraph in enumerate(paragraphs):
+        if "УДК" in paragraph:
+            if i + 1 < len(paragraphs):
+                ukrainian_title = paragraphs[i + 1]
+            break
+
+    return ukrainian_title
+
+def extract_literature(paragraphs):
+    """Extracts all literature references from the paragraphs."""
+    literature_references = []
+    found_literature = False
+
+    # Iterate through paragraphs to find the literature section and collect all references
+    for paragraph in paragraphs:
+        # Identify the start of the literature section
+        if "Список літератури" in paragraph or re.search(r"\b(literature|references)\b", paragraph, re.IGNORECASE):
+            found_literature = True
+            continue
+
+        # If we are in the literature section, continue collecting references
+        if found_literature:
+            # Check if the paragraph follows a typical reference pattern
+            if re.search(r"(doi:|vol\.|pp\.|\(\d{4}\)|\d{4})", paragraph, re.IGNORECASE):
+                literature_references.append(paragraph)
+            else:
+                # Stop if the pattern does not match a reference anymore
+                break
+
+    return literature_references
+
+def extract_english_title(paragraphs, literature_references):
+    """Extracts the English title, which is the paragraph after the last literature reference."""
+    english_title = "English title not found."
+
+    if literature_references:
+        # Find the index of the last literature reference
+        last_reference = literature_references[-1]
+        last_index = paragraphs.index(last_reference)
+
+        # The English title should be the next paragraph after the last literature reference
+        if last_index + 1 < len(paragraphs):
+            english_title = paragraphs[last_index + 1]
+
+    return english_title
+
 def extract_authors(paragraphs):
     """Extracts authors' names from the paragraphs."""
     authors_text = "Authors not found."
@@ -67,6 +117,22 @@ def create_xml_for_authors(authors_text):
     xml_str = ET.tostring(root, encoding="unicode")
     return xml_str
 
+def create_literature_xml(literature_references):
+    """Converts the extracted literature references into an XML format."""
+    # XML root element
+    root = ET.Element("citation_list")
+
+    # Process each reference and add it to the XML
+    for i, reference in enumerate(literature_references, start=1):
+        # Create a citation element with a unique key
+        citation = ET.SubElement(root, "citation", key=f"ref{i}")
+        unstructured_citation = ET.SubElement(citation, "unstructured_citation")
+        unstructured_citation.text = reference
+
+    # Convert to XML string (for display purposes)
+    xml_str = ET.tostring(root, encoding="unicode")
+    return xml_str
+
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
@@ -80,5 +146,17 @@ if __name__ == '__main__':
     abstract_text = extract_abstract(paragraphs)
     print("Abstract:", abstract_text)
 
+    ukrainian_title = extract_ukrainian_title(paragraphs)
+    print("Ukrainian Title:", ukrainian_title)
+
+    literature = extract_literature(paragraphs)
+    print("Literature References:", literature)
+
+    english_title = extract_english_title(paragraphs, literature)
+    print("\nEnglish Title:", english_title)
+
     xml_output = create_xml_for_authors(authors_text)
-    print(xml_output)
+    print("\nGenerated XML - authors:", xml_output)
+
+    xml_output = create_literature_xml(literature)
+    print("\nGenerated XML - literature:", xml_output)
