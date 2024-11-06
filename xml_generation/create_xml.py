@@ -1,21 +1,40 @@
 import xml.etree.ElementTree as ET
 from datetime import datetime
 import lxml.etree as etree
+import yaml
 from xml_generation.create_authors import create_xml_for_authors
 from xml_generation.create_literature import create_literature_xml
 from xml_generation.create_pages import create_pages_xml
 
+# Load configuration from YAML file
+with open("config.yml", "r") as config_file:
+    config = yaml.safe_load(config_file)
+
+PUBLICATION_YEAR = config["publication"]["year"]
+PUBLICATION_MONTH = config["publication"]["month"]
+JOURNAL_VOLUME = config["publication"]["volume"]
+JOURNAL_ISSUE = config["publication"]["issue"]
+JOURNAL_DOI = config["journal"]["doi"]
+JOURNAL_URL = config["journal"]["base_url"]
+ISSN_PRINT = config["journal"]["issn"]["print"]
+ISSN_ELECTRONIC = config["journal"]["issn"]["electronic"]
+JOURNAL_FULL_TITLE = config["journal"]["full_title"]
+JOURNAL_ABBREV_TITLE = config["journal"]["abbrev_title"]
+DEPOSITOR_NAME = config["depositor"]["name"]
+DEPOSITOR_EMAIL = config["depositor"]["email"]
+REGISTRANT = config["registrant"]
+
 def create_journal_metadata():
     """Creates the common journal metadata part of the XML."""
     journal_metadata = ET.Element("journal_metadata")
-    ET.SubElement(journal_metadata, "full_title").text = "Computer systems and network"
-    ET.SubElement(journal_metadata, "abbrev_title").text = "CSN"
-    ET.SubElement(journal_metadata, "issn", media_type="print").text = "27072371"
-    ET.SubElement(journal_metadata, "issn", media_type="electronic").text = "27072371"
+    ET.SubElement(journal_metadata, "full_title").text = JOURNAL_FULL_TITLE
+    ET.SubElement(journal_metadata, "abbrev_title").text = JOURNAL_ABBREV_TITLE
+    ET.SubElement(journal_metadata, "issn", media_type="print").text = ISSN_PRINT
+    ET.SubElement(journal_metadata, "issn", media_type="electronic").text = ISSN_ELECTRONIC
 
     doi_data = ET.SubElement(journal_metadata, "doi_data")
-    ET.SubElement(doi_data, "doi").text = "10.23939/csn"
-    ET.SubElement(doi_data, "resource").text = "http://science.lpnu.ua/csn"
+    ET.SubElement(doi_data, "doi").text = JOURNAL_DOI
+    ET.SubElement(doi_data, "resource").text = JOURNAL_URL
 
     return journal_metadata
 
@@ -24,17 +43,17 @@ def create_journal_issue():
     journal_issue = ET.Element("journal_issue")
 
     publication_date = ET.SubElement(journal_issue, "publication_date", media_type="print")
-    ET.SubElement(publication_date, "month").text = "06"
-    ET.SubElement(publication_date, "year").text = "2024"
+    ET.SubElement(publication_date, "month").text = PUBLICATION_MONTH
+    ET.SubElement(publication_date, "year").text = PUBLICATION_YEAR
 
     journal_volume = ET.SubElement(journal_issue, "journal_volume")
-    ET.SubElement(journal_volume, "volume").text = "6"
+    ET.SubElement(journal_volume, "volume").text = JOURNAL_VOLUME
 
-    ET.SubElement(journal_issue, "issue").text = "1"
+    ET.SubElement(journal_issue, "issue").text = JOURNAL_ISSUE
 
     doi_data = ET.SubElement(journal_issue, "doi_data")
-    ET.SubElement(doi_data, "doi").text = "10.23939/csn2024.01"
-    ET.SubElement(doi_data, "resource").text = "https://science.lpnu.ua/csn/all-volumes-and-issues/volume-6-number-1-2024"
+    ET.SubElement(doi_data, "doi").text = f"{JOURNAL_DOI}{PUBLICATION_YEAR}.{JOURNAL_ISSUE}"
+    ET.SubElement(doi_data, "resource").text = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}"
 
     return journal_issue
 
@@ -65,8 +84,8 @@ def create_journal_article(title, original_language_title, authors, pages, liter
 
     # Publication Date section
     publication_date = etree.SubElement(journal_article, "publication_date", media_type="print")
-    etree.SubElement(publication_date, "month").text = "06"
-    etree.SubElement(publication_date, "year").text = "2024"
+    etree.SubElement(publication_date, "month").text = PUBLICATION_MONTH
+    etree.SubElement(publication_date, "year").text = PUBLICATION_YEAR
 
     # Pages section
     pages_xml = create_pages_xml(pages[0], pages[1])
@@ -76,7 +95,11 @@ def create_journal_article(title, original_language_title, authors, pages, liter
     # DOI data section
     doi_data = etree.SubElement(journal_article, "doi_data")
     etree.SubElement(doi_data, "doi").text = doi
-    etree.SubElement(doi_data, "resource").text = "https://example.com/article"  # Replace with real link
+
+    # Generate the resource URL dynamically
+    formatted_title = title.lower().replace(' ', '-')
+    resource_url = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}/{formatted_title}"
+    etree.SubElement(doi_data, "resource").text = resource_url
 
     # Literature references section
     literature_xml = create_literature_xml(literature)
@@ -95,9 +118,9 @@ def create_full_xml(articles_data):
     etree.SubElement(head, "timestamp").text = current_timestamp
 
     depositor = etree.SubElement(head, "depositor")
-    etree.SubElement(depositor, "depositor_name").text = "depositor:depositor"
-    etree.SubElement(depositor, "email_address").text = "mail.com"
-    etree.SubElement(head, "registrant").text = "registrant"
+    etree.SubElement(depositor, "depositor_name").text = DEPOSITOR_NAME
+    etree.SubElement(depositor, "email_address").text = DEPOSITOR_EMAIL
+    etree.SubElement(head, "registrant").text = REGISTRANT
 
     # Create body
     body = etree.SubElement(root, "body")

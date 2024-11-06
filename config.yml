@@ -1,0 +1,20 @@
+publication:
+  year: "2024"
+  month: "06"
+  volume: "6"
+  issue: "1"
+
+journal:
+  doi: "10.23939/csn"
+  base_url: "https://science.lpnu.ua/csn"
+  issn:
+    print: "27072371"
+    electronic: "27072371"
+  full_title: "Computer systems and network"
+  abbrev_title: "CSN"
+
+depositor:
+  name: "name:name"
+  email: "email"
+
+registrant: "registrant"
