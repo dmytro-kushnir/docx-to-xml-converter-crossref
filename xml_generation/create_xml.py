@@ -24,6 +24,10 @@ DEPOSITOR_NAME = config["depositor"]["name"]
 DEPOSITOR_EMAIL = config["depositor"]["email"]
 REGISTRANT = config["registrant"]
 
+def generate_doi(start_page):
+    """Generate a DOI string based on the configuration and start page."""
+    return f"{JOURNAL_DOI}{PUBLICATION_YEAR}.{int(JOURNAL_ISSUE):02d}.{start_page:03d}"
+
 def create_journal_metadata():
     """Creates the common journal metadata part of the XML."""
     journal_metadata = ET.Element("journal_metadata")
@@ -57,7 +61,7 @@ def create_journal_issue():
 
     return journal_issue
 
-def create_journal_article(title, original_language_title, authors, pages, literature, doi, abstract_text):
+def create_journal_article(title, original_language_title, authors, pages, literature, abstract_text):
     """Creates a journal article element with given details."""
     NSMAP = {
         "jats": "http://www.ncbi.nlm.nih.gov/JATS1",
@@ -94,7 +98,7 @@ def create_journal_article(title, original_language_title, authors, pages, liter
 
     # DOI data section
     doi_data = etree.SubElement(journal_article, "doi_data")
-    etree.SubElement(doi_data, "doi").text = doi
+    etree.SubElement(doi_data, "doi").text = generate_doi(pages[0])
 
     # Generate the resource URL dynamically
     formatted_title = title.lower().replace(' ', '-')
@@ -136,8 +140,8 @@ def create_full_xml(articles_data):
 
     # Add articles
     for article in articles_data:
-        title, original_language_title, authors, pages, literature, doi, abstract_text = article
-        journal_article = create_journal_article(title, original_language_title, authors, pages, literature, doi, abstract_text)
+        title, original_language_title, authors, pages, literature, abstract_text = article
+        journal_article = create_journal_article(title, original_language_title, authors, pages, literature, abstract_text)
         journal.append(etree.fromstring(ET.tostring(journal_article)))
 
     # Convert to a pretty-printed XML string using lxml

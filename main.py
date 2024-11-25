@@ -30,7 +30,7 @@ if __name__ == '__main__':
         print(f"Start Page: {start_page}, End Page: {end_page}")
 
         # Prepare data for full XML generation
-        articles_data.append((english_title, ukrainian_title, authors_text, (start_page, end_page), literature_references, f"10.23939/csn2024.01.{start_page:03d}", abstract_text))
+        articles_data.append((english_title, ukrainian_title, authors_text, (start_page, end_page), literature_references, abstract_text))
 
     # Generate full XML for all articles
     xml_output = create_full_xml(articles_data)
