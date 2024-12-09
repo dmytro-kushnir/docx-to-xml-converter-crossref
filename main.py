@@ -7,6 +7,7 @@ from docx_processing.extractors import (
     extract_abstract,
 )
 from xml_generation.create_xml import create_full_xml
+from docx_generation.generate import create_docx_with_xml
 
 if __name__ == '__main__':
     all_docs = process_multiple_docs("articles")
@@ -34,5 +35,9 @@ if __name__ == '__main__':
 
     # Generate full XML for all articles
     xml_output = create_full_xml(articles_data)
-    with open("crossref_output.xml", "w", encoding="utf-8") as f:
+    xml_output_name = "output/crossref.xml"
+    with open(xml_output_name, "w", encoding="utf-8") as f:
         f.write(xml_output)
+
+    # Create docx document based on XML
+    create_docx_with_xml(xml_output_name, "output/doi_letter.docx")
