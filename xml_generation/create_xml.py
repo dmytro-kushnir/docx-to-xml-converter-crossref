@@ -56,7 +56,7 @@ def create_journal_issue():
     ET.SubElement(journal_issue, "issue").text = JOURNAL_ISSUE
 
     doi_data = ET.SubElement(journal_issue, "doi_data")
-    ET.SubElement(doi_data, "doi").text = f"{JOURNAL_DOI}{PUBLICATION_YEAR}.{JOURNAL_ISSUE}"
+    ET.SubElement(doi_data, "doi").text = f"{JOURNAL_DOI}{PUBLICATION_YEAR}.0{JOURNAL_ISSUE}"
     ET.SubElement(doi_data, "resource").text = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}"
 
     return journal_issue
@@ -113,7 +113,18 @@ def create_journal_article(title, original_language_title, authors, pages, liter
     return journal_article
 
 def create_full_xml(articles_data):
-    root = etree.Element("doi_batch", version="4.4.2", xmlns="http://www.crossref.org/schema/4.4.2")
+    root = etree.Element(
+        "doi_batch",
+        attrib={
+            "version": "4.4.2",
+            "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation": "http://www.crossref.org/schema/4.4.2 http://www.crossref.org/schema/deposit/crossref4.4.2.xsd"
+        },
+        nsmap={
+            None: "http://www.crossref.org/schema/4.4.2",
+            "xsi": "http://www.w3.org/2001/XMLSchema-instance",
+            "jats": "http://www.ncbi.nlm.nih.gov/JATS1"
+        }
+    )
 
     # Create head
     head = etree.SubElement(root, "head")
@@ -144,6 +155,11 @@ def create_full_xml(articles_data):
         journal_article = create_journal_article(title, original_language_title, authors, pages, literature, abstract_text)
         journal.append(etree.fromstring(ET.tostring(journal_article)))
 
+
     # Convert to a pretty-printed XML string using lxml
-    pretty_xml_str = etree.tostring(root, pretty_print=True, encoding='unicode')
-    return pretty_xml_str
+    xml_str = etree.tostring(root, pretty_print=True, encoding='unicode')
+
+    # Prepend the XML declaration
+    xml_with_declaration = f'<?xml version="1.0" encoding="UTF-8"?>\n{xml_str}'
+
+    return xml_with_declaration
