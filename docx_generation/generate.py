@@ -45,7 +45,10 @@ def create_docx_with_xml(xml_path, output_path):
         url = article.find('ns:doi_data/ns:resource', namespaces=namespace)
         url_text = url.text if url is not None else "N/A"
 
-        articles_data.append((title_text, authors, page_range, url_text))
+        doi = article.find('ns:doi_data/ns:doi', namespaces=namespace)
+        doi_text = doi.text if doi is not None else "N/A"
+
+        articles_data.append((title_text, authors, page_range, url_text, doi_text))
 
     # Create the new DOCX document
     doc = Document()
@@ -58,9 +61,8 @@ def create_docx_with_xml(xml_path, output_path):
     doc.add_paragraph(f"Contents URL: {issue_url}")
 
     # Add a table for articles
-    # Replace or update articles table
     doc.add_paragraph("\nArticles:\n")
-    table = doc.add_table(rows=1, cols=3)
+    table = doc.add_table(rows=1, cols=4)
     table.style = "Table Grid"
 
     # Define table headers
@@ -68,14 +70,15 @@ def create_docx_with_xml(xml_path, output_path):
     hdr_cells[0].text = "№"
     hdr_cells[1].text = "Authors, Title, and URL"
     hdr_cells[2].text = "Pages"
+    hdr_cells[3].text = "DOI"
 
     # Populate the table with articles
     for i, article in enumerate(articles_data, start=1):
         row_cells = table.add_row().cells
         row_cells[0].text = str(i)  # Article number
-        # Combine authors, title, and URL in the same column
         row_cells[1].text = f"{article[1]}. {article[0]}\n{article[3]}"  # Authors, title, and URL
         row_cells[2].text = article[2]  # Pages
+        row_cells[3].text = article[4]  # DOI
 
     # Save the document
     doc.save(output_path)
