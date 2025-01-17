@@ -1,4 +1,5 @@
 from docx import Document
+import os
 
 def create_docx_with_xml(xml_path, output_path):
     """
@@ -83,3 +84,12 @@ def create_docx_with_xml(xml_path, output_path):
     # Save the document
     doc.save(output_path)
     print(f"Document saved to {output_path}")
+
+if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
+    output_dir = os.path.join(root_dir, "output")
+
+    input_folder = os.path.join(output_dir, "crossref.xml")
+    output_folder = os.path.join(output_dir, "doi_letter.docx")
+    create_docx_with_xml(input_folder, output_folder)

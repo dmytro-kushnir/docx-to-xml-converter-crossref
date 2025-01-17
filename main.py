@@ -7,7 +7,7 @@ from docx_processing.extractors import (
     extract_abstract,
 )
 from xml_generation.create_xml import create_full_xml
-from docx_generation.generate import create_docx_with_xml
+from docx_generation.generate_docx import create_docx_with_xml
 
 if __name__ == '__main__':
     all_docs = process_multiple_docs("articles")

@@ -68,6 +68,11 @@ def process_and_convert_docs(input_folder, output_folder):
         _convert_docx_to_pdf(input_path, output_path)
 
 if __name__ == "__main__":
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
+    output_dir = os.path.join(root_dir, "output")
+
     input_folder = ""
-    output_folder = "output/pdfs"
+    output_folder = os.path.join(output_dir, "pdfs")
+
     process_and_convert_docs(input_folder, output_folder)

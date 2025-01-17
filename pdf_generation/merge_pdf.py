@@ -36,6 +36,11 @@ def merge_pdfs_alphabetically(input_folder, output_file):
     merger.close()
 
 if __name__ == "__main__":
-    input_folder = "output/pdfs"
-    output_file = "output/merged.pdf"
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    root_dir = os.path.dirname(current_dir)
+    output_dir = os.path.join(root_dir, "output")
+
+    input_folder = os.path.join(output_dir, "pdfs")
+    output_file = os.path.join(output_dir, "merged.pdf")
+
     merge_pdfs_alphabetically(input_folder, output_file)
