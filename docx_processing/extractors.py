@@ -37,14 +37,26 @@ def extract_english_title(paragraphs, literature_references):
             english_title = paragraphs[last_index + 1]
     return english_title
 
-def extract_authors(paragraphs):
-    """Extracts authors' names from the paragraphs."""
+def extract_authors(paragraphs, is_ukrainian=False):
+    """Extracts authors' names from the paragraphs.
+
+    :param paragraphs: List of paragraphs from the DOCX file.
+    :param is_ukrainian: Boolean flag indicating whether the text is in Ukrainian.
+    :return: Extracted authors' names.
+    """
     authors_text = "Authors not found."
+
     for paragraph in paragraphs:
-        if paragraph.startswith("©") and not re.search(r"[А-Яа-яІЇЄҐіїєґ]", paragraph):
+        if paragraph.startswith("©"):
+            # If extracting English authors, ensure no Cyrillic characters
+            if not is_ukrainian and re.search(r"[А-Яа-яІЇЄҐіїєґ]", paragraph):
+                continue  # Skip this paragraph as it contains Cyrillic
+
+            # Extract authors after '©' and clean year if present
             authors_text = paragraph[1:].strip()
             authors_text = re.sub(r"\s\d{4}$", "", authors_text).strip()
             break
+
     return authors_text
 
 def extract_abstract(paragraphs):

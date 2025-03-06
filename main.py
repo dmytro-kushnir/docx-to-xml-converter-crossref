@@ -12,6 +12,7 @@ from docx_generation.generate_docx import create_contents_docx, create_doi_lette
 if __name__ == '__main__':
     all_docs = process_multiple_docs("articles")
     articles_data = []
+    ukrainian_authors = [] # not needed for XML forming, but may be useful for other features
     for filename, paragraphs, start_page, end_page in all_docs:
         print(f"Processing file: {filename}")
 
@@ -20,12 +21,15 @@ if __name__ == '__main__':
         literature_references = extract_literature(paragraphs)
         english_title = extract_english_title(paragraphs, literature_references).upper()
         authors_text = extract_authors(paragraphs)
+        authors_ukrainian_text = extract_authors(paragraphs, True)
+        ukrainian_authors.append(authors_ukrainian_text)
         abstract_text = extract_abstract(paragraphs)
 
         # Print the extracted information
         print("Ukrainian Title:", ukrainian_title)
         print("English Title:", english_title)
         print("Authors:", authors_text)
+        print("Ukrainian Authors:", authors_ukrainian_text)
         print("Abstract:", abstract_text)
         print("Literature References:", literature_references)
         print(f"Start Page: {start_page}, End Page: {end_page}")
@@ -42,3 +46,4 @@ if __name__ == '__main__':
     # Create docx documents based on XML
     create_doi_letter_docx(xml_output_name, "output/doi_letter.docx")
     create_contents_docx(xml_output_name, "output/contents_eng.docx")
+    create_contents_docx(xml_output_name, "output/contents_ua.docx", ukrainian_authors)

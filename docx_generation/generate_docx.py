@@ -42,6 +42,9 @@ def parse_articles(xml_data):
         title_node = article.find('ns:titles/ns:title', namespaces=NAMESPACE)
         title_text = title_node.text if title_node is not None else "N/A"
 
+        original_title_node = article.find('ns:titles/ns:original_language_title', namespaces=NAMESPACE)
+        original_language_title = original_title_node.text if original_title_node is not None else "N/A"
+
         authors = ", ".join(
             f"{author.find('ns:given_name', namespaces=NAMESPACE).text or ''} {author.find('ns:surname', namespaces=NAMESPACE).text or ''}".strip()
             for author in article.findall('ns:contributors/ns:person_name', namespaces=NAMESPACE)
@@ -60,12 +63,18 @@ def parse_articles(xml_data):
         doi_node = article.find('ns:doi_data/ns:doi', namespaces=NAMESPACE)
         doi_text = doi_node.text if doi_node is not None else "N/A"
 
-        articles_data.append((i, authors, title_text, page_range, url_text, doi_text))
+        articles_data.append((i, authors, title_text, original_language_title, page_range, url_text, doi_text))
 
     return articles_data
 
-def create_contents_docx(xml_name, output_path):
-    """Generate contents_eng.docx with journal metadata and article listing."""
+def create_contents_docx(xml_name, output_path, ukrainian_authors=None):
+    """Generate contents_eng.docx or contents_ukr.docx based on available data.
+
+    :param xml_root: Parsed XML root.
+    :param output_path: Output path for the DOCX file.
+    :param articles_data: List of articles containing author names, titles, etc.
+    :param ukrainian_authors: Optional list of Ukrainian authors (same order as articles_data).
+    """
     xml_root = parse_xml(xml_name)
     journal_title, volume, issue, year, _, _, _ = parse_journal_metadata(xml_root)
     articles_data = parse_articles(xml_root)
@@ -87,11 +96,11 @@ def create_contents_docx(xml_name, output_path):
     hdr_cells[1].text = "Автори"
     hdr_cells[2].text = "Назви статей"
 
-    for article in articles_data:
+    for idx, article in enumerate(articles_data):
         row_cells = table.add_row().cells
         row_cells[0].text = str(article[0])
-        row_cells[1].text = article[1]
-        row_cells[2].text = article[2]
+        row_cells[1].text = ukrainian_authors[idx] if ukrainian_authors and ukrainian_authors[idx] else article[1]
+        row_cells[2].text = article[3] if ukrainian_authors and ukrainian_authors[idx] else article[2] # use original title if ukr authors are present or normal title otherwise
 
     doc.save(output_path)
     print(f"Contents document saved to {output_path}")
@@ -125,9 +134,9 @@ def create_doi_letter_docx(xml_name, output_path):
     for article in articles_data:
         row_cells = table.add_row().cells
         row_cells[0].text = str(article[0])  # Article number
-        row_cells[1].text = f"{article[1]}. {article[2]}\n{article[4]}"  # Authors, title, and URL
-        row_cells[2].text = article[3]  # Pages
-        row_cells[3].text = article[5]  # DOI
+        row_cells[1].text = f"{article[1]}. {article[2]}\n{article[5]}"  # Authors, title, and URL
+        row_cells[2].text = article[4]  # Pages
+        row_cells[3].text = article[6]  # DOI
 
     doc.save(output_path)
     print(f"DOI Letter document saved to {output_path}")
