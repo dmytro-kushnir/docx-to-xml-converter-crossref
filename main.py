@@ -7,7 +7,7 @@ from docx_processing.extractors import (
     extract_abstract,
 )
 from xml_generation.create_xml import create_full_xml
-from docx_generation.generate_docx import create_docx_with_xml
+from docx_generation.generate_docx import create_contents_docx, create_doi_letter_docx
 
 if __name__ == '__main__':
     all_docs = process_multiple_docs("articles")
@@ -39,5 +39,6 @@ if __name__ == '__main__':
     with open(xml_output_name, "w", encoding="utf-8") as f:
         f.write(xml_output)
 
-    # Create docx document based on XML
-    create_docx_with_xml(xml_output_name, "output/doi_letter.docx")
+    # Create docx documents based on XML
+    create_doi_letter_docx(xml_output_name, "output/doi_letter.docx")
+    create_contents_docx(xml_output_name, "output/contents_eng.docx")
