@@ -1,3 +1,4 @@
+import yaml
 from docx_processing.parse import process_multiple_docs
 from docx_processing.extractors import (
     extract_ukrainian_title,
@@ -8,9 +9,15 @@ from docx_processing.extractors import (
 )
 from xml_generation.create_xml import create_full_xml
 from docx_generation.generate_docx import create_contents_docx, create_doi_letter_docx
+from pdf_processing.page_count import extract_pdf_articles_pages
+from pdf_processing.inject_pages import inject_pages_into_articles
+
+with open("config.yml", "r") as config_file:
+    INJECT_PAGES_FROM_PDF = yaml.safe_load(config_file)["app"]["inject_pdf_pages"]
 
 if __name__ == '__main__':
-    all_docs = process_multiple_docs("articles")
+    input_folder=""
+    all_docs = process_multiple_docs(input_folder)
     articles_data = []
     ukrainian_authors = [] # not needed for XML forming, but may be useful for other features
     for filename, paragraphs, start_page, end_page in all_docs:
@@ -36,6 +43,10 @@ if __name__ == '__main__':
 
         # Prepare data for full XML generation
         articles_data.append((english_title, ukrainian_title, authors_text, (start_page, end_page), literature_references, abstract_text))
+
+    if INJECT_PAGES_FROM_PDF:
+        pages_pdf = extract_pdf_articles_pages("")
+        articles_data = inject_pages_into_articles(articles_data, pages_pdf)
 
     # Generate full XML for all articles
     xml_output = create_full_xml(articles_data)
