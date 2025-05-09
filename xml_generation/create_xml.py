@@ -5,6 +5,7 @@ import yaml
 from xml_generation.create_authors import create_xml_for_authors
 from xml_generation.create_literature import create_literature_xml
 from xml_generation.create_pages import create_pages_xml
+from xml_generation.slug_utils import slugify_title
 
 # Load configuration from YAML file
 with open("config.yml", "r") as config_file:
@@ -101,7 +102,7 @@ def create_journal_article(title, original_language_title, authors, pages, liter
     etree.SubElement(doi_data, "doi").text = generate_doi(pages[0])
 
     # Generate the resource URL dynamically
-    formatted_title = title.lower().replace(' ', '-')
+    formatted_title = slugify_title(title)
     resource_url = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}/{formatted_title}"
     etree.SubElement(doi_data, "resource").text = resource_url
 
