@@ -1,83 +1,62 @@
 from docx import Document
-import re
 import os
+import re
+from typing import List, Tuple
 
-# Define expected title patterns with human-readable labels
-EXPECTED_SEQUENCE = [
-    (r"^DOI: https?://.+", "DOI"),
-    (r"^УДК [\d.,\s]+", "УДК"),
-    (r"^[А-ЯІЇЄҐа-яіїєґ\s\-,]+", "Назва статті (українською)"),  # Ukrainian title can be text with specific characters
-    (r"^(?:[А-ЯІЇЄҐа-яіїєґ]{1,2}\.[А-ЯІЇЄҐа-яіїєґ]{1,2}\.\s*[А-ЯІЇЄҐа-яіїєґ]+)(?:,\s*[А-ЯІЇЄҐа-яіїєґ]{1,2}\.[А-ЯІЇЄҐа-яіїєґ]{1,2}\.\s*[А-ЯІЇЄҐа-яіїєґ]+)*$",
-    "Автори (перший раз, формат І.П. Прізвище, І.П. Прізвище)"),
-    (r"^\d?[А-ЯІЇЄҐа-яіїєґ\s\-,]+", "Назва університету та кафедра (може бути декілька рядків)"),
-    (r"^Е-mail: (\S+@\S+\.[a-z]{2,})(,\s*\S+@\S+\.[a-z]{2,})*$", "E-mail (може бути декілька)"),
-    (
-    r"^©\s*[А-ЯІЇЄҐа-яіїєґ]{1,2}\.[А-ЯІЇЄҐа-яіїєґ]{1,2}\.,\s*[А-ЯІЇЄҐа-яіїєґ]{1,2}\.[А-ЯІЇЄҐа-яіїєґ]{1,2}\.[А-ЯІЇЄҐа-яіїєґ\s]+\s*\d{4}$",
-    "Автори (з рік та ©, формат Прізвище І.П.)"),
-    (r"^Анотація$", "Анотація"),
-    (r"^Вступ$", "Вступ"),
-    (r"^Огляд літературних джерел$", "Огляд літературних джерел"),
-    (r"^Постановка задачі$", "Постановка задачі"),
-    (r"^Результати дослідження$", "Результати дослідження"),
-    (r"^Висновки$", "Висновки"),
-    (r"^Список літератури$", "Список літератури"),
-    (r"^[A-Za-z\s\-,]+", "Назва статті (англійською)"),  # English title with specific characters
-    (r"^©\s*[A-Z]{1}\.[A-Za-z]+,\s*[A-Z]{1}\.[A-Za-z]+\s*\d{4}$", "Автори (англійською, з рік та ©)"),
-    (r"^<Name of the university>$", "Назва університету (англійською)"),
-    (r"^Department .+$", "Кафедра (англійською)"),
-    (r"^E-mail: .+$", "E-mail (англійською)"),
+# Canonical titles from template
+REQUIRED_SECTIONS = [
+    "Вступ",
+    "Огляд літературних джерел",
+    "Постановка задачі",
+    "Результати дослідження",
+    "Висновки",
+    "Список літератури",
 ]
 
+def _normalize(s: str) -> str:
+    """Normalize text: trim, collapse spaces, drop leading numbering like '3. ' or '2.1 '."""
+    s = s.replace("\u00A0", " ")  # NBSP → space
+    s = s.strip()
+    s = re.sub(r"\s+", " ", s)
+    # Remove leading numbering patterns: 1. , 2.1 , 3) etc.
+    s = re.sub(r"^\d+(\.\d+)*[.)]?\s*", "", s)
+    return s
 
-def validate_docx_structure(filepath):
-    """Validate the structure of a DOCX document."""
-    doc = Document(filepath)
-    titles = [para.text.strip() for para in doc.paragraphs if para.text.strip()]
+def extract_paragraph_texts(docx_path: str) -> List[str]:
+    doc = Document(docx_path)
+    return [_normalize(p.text) for p in doc.paragraphs if _normalize(p.text)]
 
-    errors = []
-    index = 0
-
-    for entry in EXPECTED_SEQUENCE:
-        pattern, label = entry[:2]
-
-        while index < len(titles) and not re.match(pattern, titles[index]):
-            index += 1
-
-        if index >= len(titles):
-            errors.append(f"Відсутній або неправильно розташований розділ: {label}")
+def check_main_sections_present(docx_path: str) -> Tuple[List[str], List[str]]:
+    paras = extract_paragraph_texts(docx_path)
+    present, missing = [], []
+    for title in REQUIRED_SECTIONS:
+        if title in paras:
+            present.append(title)
         else:
-            index += 1  # Move to the next section
+            missing.append(title)
+    return present, missing
 
-    return errors
-
-
-def format_validation_report(errors, filename):
-    """Generate a validation report summarizing detected errors."""
-    if errors:
-        report = f"Документ: {filename}\n\nВиявлені помилки:\n" + "\n".join(f"- {error}" for error in errors)
+def report_for_file(docx_path: str) -> str:
+    present, missing = check_main_sections_present(docx_path)
+    if missing:
+        return (
+            f"Документ: {os.path.basename(docx_path)}\n"
+            f"❌ Відсутні розділи: {', '.join(missing)}\n"
+        )
     else:
-        report = f"Документ: {filename} пройшов перевірку."
-    return report
+        return (
+            f"Документ: {os.path.basename(docx_path)}\n"
+            f"✅ Усі розділи присутні\n"
+        )
 
-
-def validate_folder(folder_path):
-    """Validate all DOCX files in a folder."""
+def validate_folder(folder_path: str) -> List[str]:
     reports = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".docx"):
-            filepath = os.path.join(folder_path, filename)
-            errors = validate_docx_structure(filepath)
-            report = format_validation_report(errors, filename)
-            reports.append(report)
+    for name in sorted(os.listdir(folder_path)):
+        if name.lower().endswith(".docx"):
+            reports.append(report_for_file(os.path.join(folder_path, name)))
     return reports
-
-
-def main(folder_path):
-    reports = validate_folder(folder_path)
-    for report in reports:
-        print(report)
-
 
 if __name__ == "__main__":
     FOLDER_PATH = ""
-    main(FOLDER_PATH)
+    for rep in validate_folder(FOLDER_PATH):
+        print(rep)
