@@ -72,3 +72,4 @@ def extract_abstract(paragraphs):
     if abstract_start is not None:
         abstract_text = "\n".join(paragraphs[abstract_start + 1:abstract_end]).strip() if abstract_end else "\n".join(paragraphs[abstract_start + 1:]).strip()
     return abstract_text
+

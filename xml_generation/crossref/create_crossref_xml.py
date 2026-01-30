@@ -2,10 +2,10 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import lxml.etree as etree
 import yaml
-from xml_generation.create_authors import create_xml_for_authors
-from xml_generation.create_literature import create_literature_xml
-from xml_generation.create_pages import create_pages_xml
-from xml_generation.slug_utils import slugify_title
+from xml_generation.crossref.create_authors import create_xml_for_authors
+from xml_generation.crossref.create_literature import create_literature_xml
+from xml_generation.crossref.create_pages import create_pages_xml
+from xml_generation.crossref.slug_utils import slugify_title
 
 # Load configuration from YAML file
 with open("config.yml", "r") as config_file:

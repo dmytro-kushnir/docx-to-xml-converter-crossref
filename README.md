@@ -2,8 +2,10 @@
 Docx to XML converter crossref
 
 [Crossref sandbox](https://test.crossref.org/servlet/reports)
+
 [XML Validation Cross-Ref](https://www.crossref.org/XSDParse)
 
+[Crossref xml submission prod](https://doi.crossref.org/servlet/reports)
 
 For PDF processing you should install libreoffice
 

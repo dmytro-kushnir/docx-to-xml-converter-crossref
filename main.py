@@ -7,19 +7,21 @@ from docx_processing.extractors import (
     extract_authors,
     extract_abstract,
 )
-from xml_generation.create_xml import create_full_xml
+from xml_generation.crossref.create_crossref_xml import create_full_xml
+from xml_generation.ici_copernicus.create_copernicus_ini_xml import create_ici_copernicus_xml
 from docx_generation.generate_docx import create_contents_docx, create_doi_letter_docx
 from pdf_processing.page_count import extract_pdf_articles_pages
 from pdf_processing.inject_pages import inject_pages_into_articles
+with open("config.yml", "r") as f:
+    config = yaml.safe_load(f)
 
-with open("config.yml", "r") as config_file:
-    INJECT_PAGES_FROM_PDF = yaml.safe_load(config_file)["app"]["inject_pdf_pages"]
 
 if __name__ == '__main__':
     input_folder=""
     all_docs = process_multiple_docs(input_folder)
     articles_data = []
     ukrainian_authors = [] # not needed for XML forming, but may be useful for other features
+
     for filename, paragraphs, start_page, end_page in all_docs:
         print(f"Processing file: {filename}")
 
@@ -46,15 +48,17 @@ if __name__ == '__main__':
 
     if INJECT_PAGES_FROM_PDF:
         pages_pdf = extract_pdf_articles_pages("")
+    if config["app"]["inject_pdf_pages"]:
         articles_data = inject_pages_into_articles(articles_data, pages_pdf)
 
     # Generate full XML for all articles
-    xml_output = create_full_xml(articles_data)
-    xml_output_name = "output/crossref.xml"
-    with open(xml_output_name, "w", encoding="utf-8") as f:
-        f.write(xml_output)
+    with open("output/crossref.xml", "w", encoding="utf-8") as f:
+        f.write(create_full_xml(articles_data))
+
+    with open("output/copernicus.xml", "w", encoding="utf-8") as f:
+        f.write(create_ici_copernicus_xml(articles_data))
 
     # Create docx documents based on XML
-    create_doi_letter_docx(xml_output_name, "output/doi_letter.docx")
-    create_contents_docx(xml_output_name, "output/contents_eng.docx")
-    create_contents_docx(xml_output_name, "output/contents_ua.docx", ukrainian_authors)
+    create_doi_letter_docx("output/crossref.xml", "output/doi_letter.docx")
+    create_contents_docx("output/crossref.xml", "output/contents_eng.docx")
+    create_contents_docx("output/crossref.xml", "output/contents_ua.docx", ukrainian_authors)
