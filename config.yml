@@ -1,9 +1,9 @@
 app:
   inject_pdf_pages: true
 publication:
-  year: "2025"
+  year: "2026"
   month: "06"
-  volume: "7"
+  volume: "8"
   issue: "1"
 
 journal:
