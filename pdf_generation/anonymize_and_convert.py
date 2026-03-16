@@ -20,6 +20,7 @@ AFFILIATION_KEYWORDS_RE = re.compile(
     re.IGNORECASE,
 )
 NAME_LIKE_RE = re.compile(r"^[A-ZА-ЯІЇЄҐ][A-Za-zА-Яа-яІЇЄҐіїєґ.'’\-\s]+$")
+ORCID_RE = re.compile(r"\bORCID\b|\b\d{4}-\d{4}-\d{4}-\d{4}\b", re.IGNORECASE)
 
 
 def _build_anonymous_line(original_text):
@@ -38,12 +39,31 @@ def _extract_author_tokens(authors_text):
     return [part.strip() for part in parts if len(part.strip()) > 2]
 
 
+def _extract_surnames(authors_text):
+    if not authors_text or authors_text == "Authors not found.":
+        return []
+    surnames = []
+    for part in authors_text.split(","):
+        tokens = [t for t in part.strip().split() if t]
+        if not tokens:
+            continue
+        candidate = tokens[-1]
+        if re.match(r"^[A-Za-zА-Яа-яІЇЄҐіїєґ'\-]{3,}$", candidate):
+            surnames.append(candidate.lower())
+    return surnames
+
+
 def _looks_like_email_line(text):
     return bool(EMAIL_RE.search(text) or EMAIL_KEYWORDS_RE.search(text))
 
 
 def _looks_like_affiliation_line(text):
     return bool(AFFILIATION_KEYWORDS_RE.search(text))
+
+
+def _looks_like_orcid_line(text):
+    return bool(ORCID_RE.search(text))
+
 
 def _looks_like_name_line(text):
     if EMAIL_RE.search(text):
@@ -53,6 +73,17 @@ def _looks_like_name_line(text):
     if len(text) > 80:
         return False
     return bool(NAME_LIKE_RE.match(text.strip()))
+
+
+def _looks_like_initials_name_line(text):
+    if re.search(r"\d", text):
+        return False
+    if len(text) > 120:
+        return False
+    # Patterns like "Vitiv N. A." or "Н. А. Вітів"
+    has_initials = re.search(r"\b[А-ЯA-Z]\.\s*[А-ЯA-Z]\.", text)
+    has_word = re.search(r"\b[А-ЯA-Z][A-Za-zА-Яа-яІЇЄҐіїєґ']+\b", text)
+    return bool(has_initials and has_word)
 
 def _contains_author_token(text, author_tokens_lower):
     if not author_tokens_lower:
@@ -84,6 +115,7 @@ def anonymize_docx(docx_path, output_docx_path):
     author_tokens = _extract_author_tokens(authors_en) + _extract_author_tokens(authors_uk)
     author_tokens_lower = [token.lower() for token in author_tokens]
     author_tokens_exact = set(author_tokens_lower)
+    surnames_lower = _extract_surnames(authors_en) + _extract_surnames(authors_uk)
 
     para_texts = [para.text.strip() for para in doc.paragraphs]
     copyright_indices = [
@@ -92,7 +124,7 @@ def anonymize_docx(docx_path, output_docx_path):
     to_clear = set()
 
     non_empty_indices = [idx for idx, text in enumerate(para_texts) if text]
-    top_indices = set(non_empty_indices[:12])
+    top_indices = set(non_empty_indices[:25])
     text_index_map = {}
     for idx, text in enumerate(para_texts):
         if text:
@@ -103,14 +135,29 @@ def anonymize_docx(docx_path, output_docx_path):
         if not text:
             continue
 
-        if _looks_like_email_line(text) or _looks_like_affiliation_line(text):
+        if (
+            _looks_like_email_line(text)
+            or _looks_like_affiliation_line(text)
+            or _looks_like_orcid_line(text)
+        ):
             to_clear.add(idx)
 
-        if len(text) <= 120 and _contains_author_token(text, author_tokens_lower):
+        # Any initials-style author line should be cleared globally
+        if _looks_like_initials_name_line(text):
             to_clear.add(idx)
             continue
 
-        if idx in top_indices and text.lower() in author_tokens_exact:
+        if len(text) <= 160 and (
+            _contains_author_token(text, author_tokens_lower)
+            or any(s in text.lower() for s in surnames_lower)
+        ):
+            to_clear.add(idx)
+            continue
+
+        if idx in top_indices and (
+            text.lower() in author_tokens_exact
+            or any(s in text.lower() for s in surnames_lower)
+        ):
             to_clear.add(idx)
 
     for title in (title_uk, title_en):
@@ -170,16 +217,25 @@ def process_and_convert_folder(input_folder, output_folder):
     os.makedirs(output_folder, exist_ok=True)
 
     with tempfile.TemporaryDirectory() as temp_dir:
-        for filename, _, _, _ in process_multiple_docs(input_folder):
+        for index, (filename, _, _, _) in enumerate(
+            process_multiple_docs(input_folder), start=1
+        ):
             input_path = os.path.join(input_folder, filename)
             temp_docx_path = os.path.join(temp_dir, filename)
-            output_pdf_path = os.path.join(
-                output_folder,
-                filename.replace(".docx", ".pdf"),
-            )
-
+            anon_pdf_name = f"anonymous_{index:03d}.pdf"
             anonymize_docx(input_path, temp_docx_path)
-            _convert_docx_to_pdf(temp_docx_path, output_pdf_path)
+
+            # Convert using LibreOffice: output name is based on DOCX basename
+            dummy_output_path = os.path.join(output_folder, filename.replace(".docx", ".pdf"))
+            _convert_docx_to_pdf(temp_docx_path, dummy_output_path)
+
+            generated_pdf = os.path.join(
+                output_folder,
+                os.path.splitext(os.path.basename(temp_docx_path))[0] + ".pdf",
+            )
+            final_pdf = os.path.join(output_folder, anon_pdf_name)
+            if os.path.exists(generated_pdf):
+                os.replace(generated_pdf, final_pdf)
 
 
 def _parse_args():
