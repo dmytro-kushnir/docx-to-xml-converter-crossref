@@ -10,6 +10,17 @@ from docx_processing.parse import process_multiple_docs
 from pdf_generation.generate_pdf import _check_libreoffice_installed, _convert_docx_to_pdf
 
 
+def _slugify_for_filename(text, max_len=40):
+    if not text:
+        return "untitled"
+    s = text.strip().lower()
+    s = re.sub(r"[^a-z0-9]+", "-", s)
+    s = re.sub(r"-{2,}", "-", s).strip("-")
+    if not s:
+        return "untitled"
+    return s[:max_len].rstrip("-")
+
+
 EMAIL_RE = re.compile(r"[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}", re.IGNORECASE)
 EMAIL_KEYWORDS_RE = re.compile(
     r"\b(e-?mail|emails?|authors'?|authors’)\b", re.IGNORECASE
@@ -81,8 +92,9 @@ def _looks_like_initials_name_line(text):
     if len(text) > 120:
         return False
     # Patterns like "Vitiv N. A." or "Н. А. Вітів"
-    has_initials = re.search(r"\b[А-ЯA-Z]\.\s*[А-ЯA-Z]\.", text)
-    has_word = re.search(r"\b[А-ЯA-Z][A-Za-zА-Яа-яІЇЄҐіїєґ']+\b", text)
+    initials_char = r"[A-ZА-ЯІЇЄҐ]"
+    has_initials = re.search(rf"\b{initials_char}\.\s*{initials_char}\.", text)
+    has_word = re.search(rf"\b{initials_char}[A-Za-zА-Яа-яІЇЄҐіїєґ']+\b", text)
     return bool(has_initials and has_word)
 
 def _contains_author_token(text, author_tokens_lower):
@@ -222,7 +234,13 @@ def process_and_convert_folder(input_folder, output_folder):
         ):
             input_path = os.path.join(input_folder, filename)
             temp_docx_path = os.path.join(temp_dir, filename)
-            anon_pdf_name = f"anonymous_{index:03d}.pdf"
+            doc = Document(input_path)
+            doc_paragraphs = [p.text.strip() for p in doc.paragraphs if p.text.strip()]
+            lit = extract_literature(doc_paragraphs)
+            en_title = extract_english_title(doc_paragraphs, lit)
+            title_slug = _slugify_for_filename(en_title, max_len=40)
+            anon_pdf_name = f"anonymous_{index:03d}_{title_slug}.pdf"
+
             anonymize_docx(input_path, temp_docx_path)
 
             # Convert using LibreOffice: output name is based on DOCX basename
