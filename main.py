@@ -1,3 +1,4 @@
+import os
 import yaml
 from docx_processing.parse import process_multiple_docs
 from docx_processing.extractors import (
@@ -6,6 +7,7 @@ from docx_processing.extractors import (
     extract_english_title,
     extract_authors,
     extract_abstract,
+    extract_affiliation_lines,
 )
 from xml_generation.crossref.create_crossref_xml import create_full_xml
 from xml_generation.ici_copernicus.create_copernicus_ini_xml import create_ici_copernicus_xml
@@ -17,7 +19,7 @@ with open("config.yml", "r") as f:
 
 
 if __name__ == '__main__':
-    input_folder=""
+    input_folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "articles")
     all_docs = process_multiple_docs(input_folder)
     articles_data = []
     ukrainian_authors = [] # not needed for XML forming, but may be useful for other features
@@ -29,6 +31,7 @@ if __name__ == '__main__':
         ukrainian_title = extract_ukrainian_title(paragraphs).upper()
         literature_references = extract_literature(paragraphs)
         english_title = extract_english_title(paragraphs, literature_references).upper()
+        affiliation_lines = extract_affiliation_lines(paragraphs, literature_references)
         authors_text = extract_authors(paragraphs)
         authors_ukrainian_text = extract_authors(paragraphs, True)
         ukrainian_authors.append(authors_ukrainian_text)
@@ -41,14 +44,25 @@ if __name__ == '__main__':
         print("Ukrainian Authors:", authors_ukrainian_text)
         print("Abstract:", abstract_text)
         print("Literature References:", literature_references)
+        print("affiliation_lines:", affiliation_lines)
         print(f"Start Page: {start_page}, End Page: {end_page}")
 
         # Prepare data for full XML generation
-        articles_data.append((english_title, ukrainian_title, authors_text, (start_page, end_page), literature_references, abstract_text))
+        articles_data.append(
+            (
+                english_title,
+                ukrainian_title,
+                authors_text,
+                (start_page, end_page),
+                literature_references,
+                abstract_text,
+                filename,
+                affiliation_lines,
+            )
+        )
 
-    if INJECT_PAGES_FROM_PDF:
-        pages_pdf = extract_pdf_articles_pages("")
     if config["app"]["inject_pdf_pages"]:
+        pages_pdf = extract_pdf_articles_pages("")
         articles_data = inject_pages_into_articles(articles_data, pages_pdf)
 
     # Generate full XML for all articles

@@ -9,6 +9,28 @@ def parse_xml(xml_path):
     tree = etree.parse(xml_path)
     return tree.getroot()
 
+def _contributors_display_string(article):
+    contributors_el = article.find("ns:contributors", namespaces=NAMESPACE)
+    if contributors_el is None:
+        return "N/A"
+    parts = []
+    for child in list(contributors_el):
+        tag = etree.QName(child).localname
+        if tag == "person_name":
+            gn_el = child.find("ns:given_name", namespaces=NAMESPACE)
+            sn_el = child.find("ns:surname", namespaces=NAMESPACE)
+            gn = (gn_el.text or "").strip() if gn_el is not None else ""
+            sn = (sn_el.text or "").strip() if sn_el is not None else ""
+            label = f"{gn} {sn}".strip()
+            if label:
+                parts.append(label)
+        elif tag == "organization":
+            text = (child.text or "").strip()
+            if text:
+                parts.append(text)
+    return ", ".join(parts) if parts else "N/A"
+
+
 def parse_journal_metadata(xml_data):
     """Extract journal title, volume, issue, year, ISSN, and URLs from XML."""
     journal_metadata = xml_data.xpath('//ns:journal_metadata', namespaces=NAMESPACE)[0]
@@ -45,10 +67,7 @@ def parse_articles(xml_data):
         original_title_node = article.find('ns:titles/ns:original_language_title', namespaces=NAMESPACE)
         original_language_title = original_title_node.text if original_title_node is not None else "N/A"
 
-        authors = ", ".join(
-            f"{author.find('ns:given_name', namespaces=NAMESPACE).text or ''} {author.find('ns:surname', namespaces=NAMESPACE).text or ''}".strip()
-            for author in article.findall('ns:contributors/ns:person_name', namespaces=NAMESPACE)
-        ) or "N/A"
+        authors = _contributors_display_string(article)
 
         # Extract pages
         pages_node = article.find('ns:pages', namespaces=NAMESPACE)

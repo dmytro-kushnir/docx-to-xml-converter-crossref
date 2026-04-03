@@ -201,7 +201,7 @@ def create_ici_copernicus_xml(articles_data):
     root.append(issue_el)
 
     for item in articles_data:
-        en_title, uk_title, authors_text, pages, refs, abstract_text = item
+        en_title, uk_title, authors_text, pages, refs, abstract_text = item[:6]
         article_el = create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text)
         issue_el.append(article_el)
 

@@ -35,8 +35,9 @@ Converts batches of academic DOCX articles (Ukrainian/English) into:
 
 ## Data model (high level)
 Each article becomes a tuple/list of:
-`(english_title, ukrainian_title, authors_text, (start_page, end_page), literature_refs, abstract_text)`
-This structure is passed into XML and DOCX generators.
+`(english_title, ukrainian_title, authors_text, (start_page, end_page), literature_refs, abstract_text, affiliation_lines)`
+- `affiliation_lines`: `list[str]` between the English title and `©` (excluding a typical byline). Crossref adds `<organization>` from **sanitized** lines before `<person_name>` when non-empty. ICI Copernicus uses only the first six fields (`item[:6]`).
+This structure is passed into XML generators; DOI letter / contents are built from `output/crossref.xml` via `docx_generation/generate_docx.py`.
 
 ## Important constraints and cautions
 - PDF page injection relies on a marker phrase in the PDF; verify matching text.

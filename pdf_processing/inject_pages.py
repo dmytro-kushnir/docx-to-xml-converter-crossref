@@ -13,6 +13,7 @@ def inject_pages_into_articles(articles_data, pages_data):
             new_range,
             article[4],  # references
             article[5],  # abstract
+            article[6],  # affiliation_lines
         )
         print(f"[INFO] '{article[0]}': сторінки змінено з {old_range} на {new_range}")
         updated_articles.append(updated)

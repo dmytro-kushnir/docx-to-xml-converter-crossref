@@ -1,5 +1,6 @@
 app:
-  inject_pdf_pages: true
+  inject_pdf_pages: false
+
 publication:
   year: "2026"
   month: "06"

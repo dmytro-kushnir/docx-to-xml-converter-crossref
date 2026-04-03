@@ -2,7 +2,11 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import lxml.etree as etree
 import yaml
-from xml_generation.crossref.create_authors import create_xml_for_authors
+from docx_processing.extractors import sanitize_affiliation_lines_for_organization
+from xml_generation.crossref.create_authors import (
+    create_xml_for_authors,
+    create_xml_organizations_then_authors,
+)
 from xml_generation.crossref.create_literature import create_literature_xml
 from xml_generation.crossref.create_pages import create_pages_xml
 from xml_generation.crossref.slug_utils import slugify_title
@@ -24,6 +28,7 @@ JOURNAL_ABBREV_TITLE = config["journal"]["abbrev_title"]
 DEPOSITOR_NAME = config["depositor"]["name"]
 DEPOSITOR_EMAIL = config["depositor"]["email"]
 REGISTRANT = config["registrant"]
+
 
 def generate_doi(start_page):
     """Generate a DOI string based on the configuration and start page."""
@@ -62,8 +67,19 @@ def create_journal_issue():
 
     return journal_issue
 
-def create_journal_article(title, original_language_title, authors, pages, literature, abstract_text):
-    """Creates a journal article element with given details."""
+def create_journal_article(
+    title,
+    original_language_title,
+    authors,
+    pages,
+    literature,
+    abstract_text,
+    affiliation_lines,
+):
+    """Creates a journal article element with given details.
+
+    affiliation_lines: sanitized lines become <organization> before <person_name> when non-empty.
+    """
     NSMAP = {
         "jats": "http://www.ncbi.nlm.nih.gov/JATS1",
         "xml": "http://www.w3.org/XML/1998/namespace"
@@ -77,7 +93,13 @@ def create_journal_article(title, original_language_title, authors, pages, liter
         etree.SubElement(titles, "original_language_title").text = original_language_title
 
     # Contributors section
-    contributors_xml = create_xml_for_authors(authors)
+    org_lines = sanitize_affiliation_lines_for_organization(affiliation_lines or [])
+    if org_lines:
+        contributors_xml = create_xml_organizations_then_authors(org_lines, authors)
+        if len(ET.fromstring(contributors_xml)) == 0:
+            contributors_xml = create_xml_for_authors(authors)
+    else:
+        contributors_xml = create_xml_for_authors(authors)
     contributors_element = etree.fromstring(contributors_xml)
     contributors_element.tag = "contributors"
     journal_article.append(contributors_element)
@@ -152,8 +174,24 @@ def create_full_xml(articles_data):
 
     # Add articles
     for article in articles_data:
-        title, original_language_title, authors, pages, literature, abstract_text = article
-        journal_article = create_journal_article(title, original_language_title, authors, pages, literature, abstract_text)
+        (
+            title,
+            original_language_title,
+            authors,
+            pages,
+            literature,
+            abstract_text,
+            affiliation_lines,
+        ) = article
+        journal_article = create_journal_article(
+            title,
+            original_language_title,
+            authors,
+            pages,
+            literature,
+            abstract_text,
+            affiliation_lines,
+        )
         journal.append(etree.fromstring(ET.tostring(journal_article)))
 
 
