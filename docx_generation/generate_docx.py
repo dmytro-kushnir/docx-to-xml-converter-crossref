@@ -10,24 +10,22 @@ def parse_xml(xml_path):
     return tree.getroot()
 
 def _contributors_display_string(article):
+    """Author names for tables — person_name only; omit <organization> (affiliations)."""
     contributors_el = article.find("ns:contributors", namespaces=NAMESPACE)
     if contributors_el is None:
         return "N/A"
     parts = []
     for child in list(contributors_el):
         tag = etree.QName(child).localname
-        if tag == "person_name":
-            gn_el = child.find("ns:given_name", namespaces=NAMESPACE)
-            sn_el = child.find("ns:surname", namespaces=NAMESPACE)
-            gn = (gn_el.text or "").strip() if gn_el is not None else ""
-            sn = (sn_el.text or "").strip() if sn_el is not None else ""
-            label = f"{gn} {sn}".strip()
-            if label:
-                parts.append(label)
-        elif tag == "organization":
-            text = (child.text or "").strip()
-            if text:
-                parts.append(text)
+        if tag != "person_name":
+            continue
+        gn_el = child.find("ns:given_name", namespaces=NAMESPACE)
+        sn_el = child.find("ns:surname", namespaces=NAMESPACE)
+        gn = (gn_el.text or "").strip() if gn_el is not None else ""
+        sn = (sn_el.text or "").strip() if sn_el is not None else ""
+        label = f"{gn} {sn}".strip()
+        if label:
+            parts.append(label)
     return ", ".join(parts) if parts else "N/A"
 
 

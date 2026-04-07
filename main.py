@@ -56,7 +56,6 @@ if __name__ == '__main__':
                 (start_page, end_page),
                 literature_references,
                 abstract_text,
-                filename,
                 affiliation_lines,
             )
         )
