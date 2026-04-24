@@ -3,6 +3,7 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 import lxml.etree as etree
 import yaml
+from docx_processing.extractors import sanitize_affiliation_lines_for_organization
 
 # ---------- Load configuration (same style as your Crossref file) ----------
 with open("config.yml", "r", encoding="utf-8") as config_file:
@@ -79,20 +80,70 @@ def parse_authors_simple(authors_text: str):
         })
     return authors
 
-def extract_keywords_from_abstract(abstract_text: str):
-    """
-    Optional: try to catch 'Keywords:' at the end of the abstract and split by commas/semicolons.
-    If none found, return [] and skip the block.
-    """
-    if not abstract_text:
+def _parse_keywords_line(text: str):
+    if not text:
         return []
-    m = re.search(r"(?:^|\n|\.\s*)(keywords?|ключові\s+слова|ключевые\s+слова)\s*:\s*(.+)$",
-                  abstract_text, flags=re.IGNORECASE | re.DOTALL)
-    if not m:
-        return []
-    tail = m.group(2)
-    items = [x.strip(" .;:,–—") for x in re.split(r"[;,]", tail) if x.strip()]
+    items = [x.strip(" .;:,–—()[]") for x in re.split(r"[;,]", text) if x.strip()]
     return [x for x in items if 0 < len(x) <= 80][:20]
+
+
+def split_multilingual_abstract_payload(abstract_text: str):
+    """
+    Parse EN/UK abstract and keyword sections from a single extracted abstract block.
+    Uses labels when present and falls back to EN-only payload.
+    """
+    payload = {
+        "en_abstract": "",
+        "uk_abstract": "",
+        "en_keywords": [],
+        "uk_keywords": [],
+    }
+    if not abstract_text:
+        return payload
+
+    lines = [line.strip() for line in abstract_text.splitlines() if line.strip()]
+    state = None
+
+    for line in lines:
+        en_abs_match = re.match(r"^abstract\s*[:.\-]?\s*(.*)$", line, flags=re.IGNORECASE)
+        uk_abs_match = re.match(r"^анотац(?:ія|iя)\s*[:.\-]?\s*(.*)$", line, flags=re.IGNORECASE)
+        en_kw_match = re.match(r"^keywords?\s*[:.\-]?\s*(.*)$", line, flags=re.IGNORECASE)
+        uk_kw_match = re.match(r"^ключов[іi]\s+слова\s*[:.\-]?\s*(.*)$", line, flags=re.IGNORECASE)
+
+        if en_abs_match:
+            state = "en_abstract"
+            rest = en_abs_match.group(1).strip()
+            if rest:
+                payload["en_abstract"] = f'{payload["en_abstract"]}\n{rest}'.strip()
+            continue
+        if uk_abs_match:
+            state = "uk_abstract"
+            rest = uk_abs_match.group(1).strip()
+            if rest:
+                payload["uk_abstract"] = f'{payload["uk_abstract"]}\n{rest}'.strip()
+            continue
+        if en_kw_match:
+            state = None
+            payload["en_keywords"].extend(_parse_keywords_line(en_kw_match.group(1)))
+            continue
+        if uk_kw_match:
+            state = None
+            payload["uk_keywords"].extend(_parse_keywords_line(uk_kw_match.group(1)))
+            continue
+
+        if state == "en_abstract":
+            payload["en_abstract"] = f'{payload["en_abstract"]}\n{line}'.strip()
+        elif state == "uk_abstract":
+            payload["uk_abstract"] = f'{payload["uk_abstract"]}\n{line}'.strip()
+
+    if not payload["en_abstract"]:
+        cleaned_lines = [
+            line for line in lines
+            if not re.match(r"^(keywords?|ключов[іi]\s+слова)\s*[:.\-]?\s*", line, flags=re.IGNORECASE)
+        ]
+        payload["en_abstract"] = "\n".join(cleaned_lines).strip()
+
+    return payload
 
 # ---------- Builders (similar style/shape to your Crossref functions) ----------
 def create_issue_element():
@@ -130,7 +181,7 @@ def append_language_version(parent_el, language: str, title: str, abstract_text:
         for k in keywords:
             ET.SubElement(ks, "keyword").text = k
 
-def create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text):
+def create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text, affiliation_lines):
     """
     Creates one <article> node (with EN languageVersion required, optional UK languageVersion,
     <authors>, <references>). Mirrors your Crossref article builder in spirit.
@@ -142,31 +193,35 @@ def create_article_element(en_title, uk_title, authors_text, pages, refs, abstra
     article_el = ET.Element("article", attrib={"externalId": doi})
     ET.SubElement(article_el, "type").text = "ORIGINAL_ARTICLE"
 
-    # EN languageVersion (title/abstract/pages/doi/publicationDate)
-    kws = extract_keywords_from_abstract(abstract_text)
+    # EN/UK languageVersion payload extracted from the shared abstract block
+    lang_payload = split_multilingual_abstract_payload(abstract_text)
     # If you want a predictable PDF URL, keep this; otherwise leave as None
     # pdf_url_en = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}/{slugify_title(en_title)}.pdf"
     pdf_url_en = None
     append_language_version(
-        article_el, "en", en_title, abstract_text, publication_date,
-        start_page, end_page, doi, pdf_url=pdf_url_en, keywords=kws
+        article_el, "en", en_title, lang_payload["en_abstract"], publication_date,
+        start_page, end_page, doi, pdf_url=pdf_url_en, keywords=lang_payload["en_keywords"]
     )
 
-    # UKR languageVersion (title only unless you have a UA abstract)
+    # UKR languageVersion with abstract/keywords when available
     if uk_title:
         append_language_version(
-            article_el, "uk", uk_title, None, publication_date,
-            start_page, end_page, doi, pdf_url=None, keywords=None
+            article_el, "uk", uk_title, lang_payload["uk_abstract"], publication_date,
+            start_page, end_page, doi, pdf_url=None, keywords=lang_payload["uk_keywords"]
         )
 
     # Authors
     parsed = parse_authors_simple(authors_text)
+    org_lines = sanitize_affiliation_lines_for_organization(affiliation_lines or [])
+    affiliation_text = "; ".join(org_lines) if org_lines else None
     if parsed:
         authors_el = ET.SubElement(article_el, "authors")
         for a in parsed:
             ae = ET.SubElement(authors_el, "author")
             if a.get("name"):    ET.SubElement(ae, "name").text = a["name"]
             if a.get("surname"): ET.SubElement(ae, "surname").text = a["surname"]
+            if affiliation_text:
+                ET.SubElement(ae, "instituteAffiliation").text = affiliation_text
             ET.SubElement(ae, "polishAffiliation").text = a.get("polishAffiliation", "false")
             ET.SubElement(ae, "order").text = a.get("order", "1")
             ET.SubElement(ae, "role").text = a.get("role", "AUTHOR")
@@ -202,7 +257,10 @@ def create_ici_copernicus_xml(articles_data):
 
     for item in articles_data:
         en_title, uk_title, authors_text, pages, refs, abstract_text = item[:6]
-        article_el = create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text)
+        affiliation_lines = item[6] if len(item) > 6 else []
+        article_el = create_article_element(
+            en_title, uk_title, authors_text, pages, refs, abstract_text, affiliation_lines
+        )
         issue_el.append(article_el)
 
     # Set numberOfArticles attribute at the end
@@ -220,7 +278,3 @@ if __name__ == "__main__":
     demo_articles_data = []  # fill with your tuples
     print(create_ici_copernicus_xml(demo_articles_data))
 
-
-# to add instituteAffiliation
-# to add support of reading ukr abstract an ukr keywords
-# to be able to parse english keyword from article
