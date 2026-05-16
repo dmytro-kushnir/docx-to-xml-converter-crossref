@@ -8,6 +8,8 @@ from docx_processing.extractors import (
     extract_authors,
     extract_abstract,
     extract_affiliation_lines,
+    extract_author_orcids,
+    align_author_orcids,
 )
 from xml_generation.crossref.create_crossref_xml import create_full_xml
 from xml_generation.ici_copernicus.create_copernicus_ini_xml import create_ici_copernicus_xml
@@ -33,6 +35,10 @@ if __name__ == '__main__':
         english_title = extract_english_title(paragraphs, literature_references).upper()
         affiliation_lines = extract_affiliation_lines(paragraphs, literature_references)
         authors_text = extract_authors(paragraphs)
+        author_orcids = align_author_orcids(
+            authors_text,
+            extract_author_orcids(paragraphs, literature_references),
+        )
         authors_ukrainian_text = extract_authors(paragraphs, True)
         ukrainian_authors.append(authors_ukrainian_text)
         abstract_text = extract_abstract(paragraphs)
@@ -45,6 +51,7 @@ if __name__ == '__main__':
         print("Abstract:", abstract_text)
         print("Literature References:", literature_references)
         print("affiliation_lines:", affiliation_lines)
+        print("author_orcids:", author_orcids)
         print(f"Start Page: {start_page}, End Page: {end_page}")
 
         # Prepare data for full XML generation
@@ -57,6 +64,7 @@ if __name__ == '__main__':
                 literature_references,
                 abstract_text,
                 affiliation_lines,
+                author_orcids,
             )
         )
 

@@ -15,6 +15,8 @@ def inject_pages_into_articles(articles_data, pages_data):
             article[5],  # abstract
             article[6],  # affiliation_lines
         )
+        if len(article) > 7:
+            updated = updated + (article[7],)  # author_orcids
         print(f"[INFO] '{article[0]}': сторінки змінено з {old_range} на {new_range}")
         updated_articles.append(updated)
 

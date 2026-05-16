@@ -1,5 +1,6 @@
+
 app:
-  inject_pdf_pages: false
+  inject_pdf_pages: true
 
 publication:
   year: "2026"
@@ -21,3 +22,6 @@ depositor:
   email: "email"
 
 registrant: "registrant"
+license:
+  url: "https://creativecommons.org/licenses/by/4.0/"
+  applies_to: "vor"  # version of record (Crossref AccessIndicators)
