@@ -121,6 +121,14 @@ def affiliation_lines_for_crossref_organization(lines):
     return [cleaned[0]]
 
 
+def affiliation_department_for_crossref(lines):
+    """Optional department line from header affiliations (for institution_department)."""
+    for text in sanitize_affiliation_lines_for_organization(lines or []):
+        if DEPARTMENT_LINE_RE.match(text):
+            return text
+    return None
+
+
 def normalize_orcid_url(orcid_id):
     """Return a Crossref-compatible ORCID URL."""
     if not orcid_id:

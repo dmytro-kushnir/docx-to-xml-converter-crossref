@@ -51,6 +51,61 @@ def _attach_orcid(person_name, author_orcids, author_index):
         ET.SubElement(person_name, "ORCID").text = author_orcids[author_index]
 
 
+def _append_affiliations(person_name, institution, department=None):
+    """Crossref 5.3+ affiliations with ROR on person_name."""
+    if not institution:
+        return
+    ror = (institution.get("ror") or "").strip()
+    name = (institution.get("name") or "").strip()
+    if not ror or not name:
+        return
+    affiliations = ET.SubElement(person_name, "affiliations")
+    inst_el = ET.SubElement(affiliations, "institution")
+    # Schema order: institution_name, then institution_id; department after optional fields
+    ET.SubElement(inst_el, "institution_name").text = name
+    ET.SubElement(inst_el, "institution_id", type="ror").text = ror
+    dept = (department or "").strip()
+    if dept:
+        ET.SubElement(inst_el, "institution_department").text = dept
+
+
+def create_xml_for_authors_with_affiliations(
+    authors_text,
+    institution=None,
+    author_orcids=None,
+    department=None,
+):
+    """person_name contributors with optional ROR affiliations (no separate organization nodes)."""
+    authors_list = split_copyright_authors(authors_text)
+    root = ET.Element("contributors")
+    emitted = 0
+    author_orcids = author_orcids or []
+
+    for author_index, author in enumerate(authors_list):
+        parsed = _parse_author_name(author)
+        if not parsed:
+            continue
+
+        given_name, surname = parsed
+        given_name = re.sub(r"\d+", "", given_name).strip()
+        surname = surname.strip()
+        if not given_name or not surname:
+            continue
+
+        sequence = "first" if emitted == 0 else "additional"
+        emitted += 1
+
+        person_name = ET.SubElement(
+            root, "person_name", sequence=sequence, contributor_role="author"
+        )
+        ET.SubElement(person_name, "given_name").text = given_name
+        ET.SubElement(person_name, "surname").text = surname
+        _append_affiliations(person_name, institution, department)
+        _attach_orcid(person_name, author_orcids, author_index)
+
+    return ET.tostring(root, encoding="unicode")
+
+
 def create_xml_organizations_then_authors(organization_lines, authors_text, author_orcids=None):
     """Emit <organization> nodes from extracted lines, then <person_name> from authors_text; re-sequence in order."""
     root = ET.Element("contributors")

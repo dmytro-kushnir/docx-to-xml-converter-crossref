@@ -36,7 +36,7 @@ Converts batches of academic DOCX articles (Ukrainian/English) into:
 ## Data model (high level)
 Each article becomes a tuple/list of:
 `(english_title, ukrainian_title, authors_text, (start_page, end_page), literature_refs, abstract_text, affiliation_lines)`
-- `affiliation_lines`: `list[str]` between the English title and `©` (excluding a typical byline). Crossref adds `<organization>` from **sanitized** lines before `<person_name>` when non-empty. ICI Copernicus uses only the first six fields (`item[:6]`).
+- `affiliation_lines`: `list[str]` between the English title and `©` (excluding a typical byline). Crossref 5.4.0 maps the primary university to ROR `<affiliations>` on each `<person_name>` (`config.yml` → `institutions`). ICI Copernicus uses full sanitized lines (`item[:6]`).
 This structure is passed into XML generators; DOI letter / contents are built from `output/crossref.xml` via `docx_generation/generate_docx.py`.
 
 ## Important constraints and cautions
@@ -46,6 +46,6 @@ This structure is passed into XML generators; DOI letter / contents are built fr
 - `main.py` uses some hardcoded paths; update carefully.
 
 ## When changing behavior
-- Keep XML schemas valid (Crossref 4.4.2, ICI Copernicus).
+- Keep XML schemas valid (Crossref 5.4.0 + ROR affiliations, ICI Copernicus).
 - Update both EN/UA flows when changing title/author parsing.
 - If you modify extraction logic, verify downstream XML/DOCX generators.

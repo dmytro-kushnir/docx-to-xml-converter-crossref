@@ -2,6 +2,36 @@
 app:
   inject_pdf_pages: true
 
+crossref:
+  schema_version: "5.4.0"
+  default_institution: lpnu
+
+# ROR registry URLs — used for <institution_id type="ror"> in schema 5.4.0+
+institutions:
+  lpnu:
+    name: "Lviv Polytechnic National University"
+    ror: "https://ror.org/0542q3127"
+    aliases:
+      - "Lviv Polytechnic"
+      - "National University Lviv Polytechnic"
+  grinchenko:
+    name: "Borys Grinchenko Kyiv Metropolitan University"
+    ror: "https://ror.org/01t5m8p03"
+    aliases:
+      - "Borys Grinchenko Kyiv University"
+  kai:
+    name: 'State University "Kyiv Aviation Institute"'
+    ror: "https://ror.org/01f74x078"
+    aliases:
+      - "Kyiv Aviation Institute"
+      - "National Aviation University"
+  immsp:
+    name: "Institute for Problems of Mathematical Machines and Systems National Academy of Sciences of Ukraine"
+    ror: "https://ror.org/034m0w958"
+    aliases:
+      - "Institute of Mathematical Machines and Systems Problems"
+      - "IMMSP NASU"
+
 publication:
   year: "2026"
   month: "06"

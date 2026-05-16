@@ -2,11 +2,15 @@ import xml.etree.ElementTree as ET
 from datetime import datetime
 import lxml.etree as etree
 import yaml
-from docx_processing.extractors import affiliation_lines_for_crossref_organization
+from docx_processing.extractors import (
+    affiliation_department_for_crossref,
+    affiliation_lines_for_crossref_organization,
+)
 from xml_generation.crossref.create_authors import (
     create_xml_for_authors,
-    create_xml_organizations_then_authors,
+    create_xml_for_authors_with_affiliations,
 )
+from xml_generation.crossref.institution_ror import resolve_institution
 from xml_generation.crossref.create_literature import create_literature_xml
 from xml_generation.crossref.create_pages import create_pages_xml
 from xml_generation.crossref.slug_utils import slugify_title
@@ -33,6 +37,18 @@ LICENSE_URL = config.get("license", {}).get(
     "url", "https://creativecommons.org/licenses/by/4.0/"
 )
 LICENSE_APPLIES_TO = config.get("license", {}).get("applies_to", "vor")
+CROSSREF_SCHEMA_VERSION = config.get("crossref", {}).get("schema_version", "5.4.0")
+CROSSREF_NS = f"http://www.crossref.org/schema/{CROSSREF_SCHEMA_VERSION}"
+INSTITUTIONS_CONFIG = config.get("institutions") or {}
+DEFAULT_INSTITUTION_ID = config.get("crossref", {}).get("default_institution")
+
+
+def _qualify_crossref_ns(element, ns=CROSSREF_NS):
+    """Ensure elements parsed from stdlib ElementTree use the Crossref default namespace."""
+    if element.tag and not str(element.tag).startswith("{"):
+        element.tag = f"{{{ns}}}{element.tag}"
+    for child in element:
+        _qualify_crossref_ns(child, ns)
 
 
 def generate_doi(start_page):
@@ -84,10 +100,11 @@ def create_journal_article(
 ):
     """Creates a journal article element with given details.
 
-    affiliation_lines: primary university/institute only → one <organization> before <person_name>.
+    affiliation_lines: primary university/institute → ROR <affiliations> on each <person_name>.
     author_orcids: list of https://orcid.org/... URLs, matched to authors in order.
     """
     NSMAP = {
+        None: CROSSREF_NS,
         "jats": "http://www.ncbi.nlm.nih.gov/JATS1",
         "xml": "http://www.w3.org/XML/1998/namespace",
         "ai": AI_NS,
@@ -100,18 +117,26 @@ def create_journal_article(
     if original_language_title:
         etree.SubElement(titles, "original_language_title").text = original_language_title
 
-    # Contributors section
+    # Contributors: person_name + ROR affiliations (schema 5.4.0)
     org_lines = affiliation_lines_for_crossref_organization(affiliation_lines or [])
+    institution = None
     if org_lines:
-        contributors_xml = create_xml_organizations_then_authors(
-            org_lines, authors, author_orcids=author_orcids
+        institution = resolve_institution(
+            org_lines[0],
+            INSTITUTIONS_CONFIG,
+            default_institution_id=DEFAULT_INSTITUTION_ID,
         )
-        if len(ET.fromstring(contributors_xml)) == 0:
-            contributors_xml = create_xml_for_authors(authors, author_orcids=author_orcids)
-    else:
+    department = affiliation_department_for_crossref(affiliation_lines or [])
+    contributors_xml = create_xml_for_authors_with_affiliations(
+        authors,
+        institution=institution,
+        author_orcids=author_orcids,
+        department=department,
+    )
+    if len(ET.fromstring(contributors_xml)) == 0:
         contributors_xml = create_xml_for_authors(authors, author_orcids=author_orcids)
     contributors_element = etree.fromstring(contributors_xml)
-    contributors_element.tag = "contributors"
+    _qualify_crossref_ns(contributors_element)
     journal_article.append(contributors_element)
 
     # Abstract section
@@ -127,9 +152,10 @@ def create_journal_article(
     # Pages section
     pages_xml = create_pages_xml(pages[0], pages[1])
     pages_element = etree.fromstring(pages_xml)
+    _qualify_crossref_ns(pages_element)
     journal_article.append(pages_element)
 
-    # License (AccessIndicators) — must be before doi_data per Crossref 4.4.2 schema
+    # License (AccessIndicators) — before doi_data
     access_program = etree.SubElement(
         journal_article, f"{{{AI_NS}}}program", name="AccessIndicators"
     )
@@ -152,23 +178,27 @@ def create_journal_article(
     # Literature references section
     literature_xml = create_literature_xml(literature)
     literature_element = etree.fromstring(literature_xml)
+    _qualify_crossref_ns(literature_element)
     journal_article.append(literature_element)
 
     return journal_article
 
 def create_full_xml(articles_data):
+    schema_xsd = f"http://www.crossref.org/schemas/crossref{CROSSREF_SCHEMA_VERSION}.xsd"
     root = etree.Element(
         "doi_batch",
         attrib={
-            "version": "4.4.2",
-            "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation": "http://www.crossref.org/schema/4.4.2 http://www.crossref.org/schema/deposit/crossref4.4.2.xsd"
+            "version": CROSSREF_SCHEMA_VERSION,
+            "{http://www.w3.org/2001/XMLSchema-instance}schemaLocation": (
+                f"{CROSSREF_NS} {schema_xsd}"
+            ),
         },
         nsmap={
-            None: "http://www.crossref.org/schema/4.4.2",
+            None: CROSSREF_NS,
             "xsi": "http://www.w3.org/2001/XMLSchema-instance",
             "jats": "http://www.ncbi.nlm.nih.gov/JATS1",
             "ai": AI_NS,
-        }
+        },
     )
 
     # Create head
@@ -188,11 +218,15 @@ def create_full_xml(articles_data):
 
     # Add journal metadata
     journal_metadata = create_journal_metadata()
-    journal.append(etree.fromstring(ET.tostring(journal_metadata)))
+    jmeta = etree.fromstring(ET.tostring(journal_metadata))
+    _qualify_crossref_ns(jmeta)
+    journal.append(jmeta)
 
     # Add journal issue
     journal_issue = create_journal_issue()
-    journal.append(etree.fromstring(ET.tostring(journal_issue)))
+    jissue = etree.fromstring(ET.tostring(journal_issue))
+    _qualify_crossref_ns(jissue)
+    journal.append(jissue)
 
     # Add articles
     for article in articles_data:
@@ -216,7 +250,9 @@ def create_full_xml(articles_data):
             affiliation_lines,
             author_orcids=author_orcids,
         )
-        journal.append(etree.fromstring(ET.tostring(journal_article)))
+        ja = etree.fromstring(ET.tostring(journal_article))
+        _qualify_crossref_ns(ja)
+        journal.append(ja)
 
 
     # Convert to a pretty-printed XML string using lxml

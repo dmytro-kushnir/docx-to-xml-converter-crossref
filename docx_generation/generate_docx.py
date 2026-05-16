@@ -2,16 +2,24 @@ from docx import Document
 import os
 import lxml.etree as etree
 
-NAMESPACE = {'ns': 'http://www.crossref.org/schema/4.4.2'}
-
 def parse_xml(xml_path):
     """Parse XML file and return its root element."""
     tree = etree.parse(xml_path)
     return tree.getroot()
 
-def _contributors_display_string(article):
+
+def _crossref_namespace(root):
+    if root.tag.startswith("{"):
+        return root.tag[1 : root.tag.index("}")]
+    return root.nsmap.get(None) or "http://www.crossref.org/schema/5.4.0"
+
+
+def _nsmap(root):
+    return {"ns": _crossref_namespace(root)}
+
+def _contributors_display_string(article, nsmap):
     """Author names for tables — person_name only; omit <organization> (affiliations)."""
-    contributors_el = article.find("ns:contributors", namespaces=NAMESPACE)
+    contributors_el = article.find("ns:contributors", namespaces=nsmap)
     if contributors_el is None:
         return "N/A"
     parts = []
@@ -19,8 +27,8 @@ def _contributors_display_string(article):
         tag = etree.QName(child).localname
         if tag != "person_name":
             continue
-        gn_el = child.find("ns:given_name", namespaces=NAMESPACE)
-        sn_el = child.find("ns:surname", namespaces=NAMESPACE)
+        gn_el = child.find("ns:given_name", namespaces=nsmap)
+        sn_el = child.find("ns:surname", namespaces=nsmap)
         gn = (gn_el.text or "").strip() if gn_el is not None else ""
         sn = (sn_el.text or "").strip() if sn_el is not None else ""
         label = f"{gn} {sn}".strip()
@@ -29,55 +37,55 @@ def _contributors_display_string(article):
     return ", ".join(parts) if parts else "N/A"
 
 
-def parse_journal_metadata(xml_data):
+def parse_journal_metadata(xml_data, nsmap):
     """Extract journal title, volume, issue, year, ISSN, and URLs from XML."""
-    journal_metadata = xml_data.xpath('//ns:journal_metadata', namespaces=NAMESPACE)[0]
-    journal_title = journal_metadata.find('ns:full_title', namespaces=NAMESPACE).text
+    journal_metadata = xml_data.xpath('//ns:journal_metadata', namespaces=nsmap)[0]
+    journal_title = journal_metadata.find('ns:full_title', namespaces=nsmap).text
 
-    issn_node = journal_metadata.find('ns:issn[@media_type="print"]', namespaces=NAMESPACE)
+    issn_node = journal_metadata.find('ns:issn[@media_type="print"]', namespaces=nsmap)
     issn = issn_node.text if issn_node is not None else "N/A"
 
-    journal_url_node = journal_metadata.find('ns:doi_data/ns:resource', namespaces=NAMESPACE)
+    journal_url_node = journal_metadata.find('ns:doi_data/ns:resource', namespaces=nsmap)
     journal_url = journal_url_node.text if journal_url_node is not None else "N/A"
 
-    issue_metadata = xml_data.xpath('//ns:journal_issue', namespaces=NAMESPACE)[0]
-    volume = issue_metadata.find('ns:journal_volume/ns:volume', namespaces=NAMESPACE).text
-    issue = issue_metadata.find('ns:issue', namespaces=NAMESPACE).text
+    issue_metadata = xml_data.xpath('//ns:journal_issue', namespaces=nsmap)[0]
+    volume = issue_metadata.find('ns:journal_volume/ns:volume', namespaces=nsmap).text
+    issue = issue_metadata.find('ns:issue', namespaces=nsmap).text
 
-    issue_url_node = issue_metadata.find('ns:doi_data/ns:resource', namespaces=NAMESPACE)
+    issue_url_node = issue_metadata.find('ns:doi_data/ns:resource', namespaces=nsmap)
     issue_url = issue_url_node.text if issue_url_node is not None else "N/A"
 
     # Extract the year
-    year_node = issue_metadata.find('ns:publication_date/ns:year', namespaces=NAMESPACE)
+    year_node = issue_metadata.find('ns:publication_date/ns:year', namespaces=nsmap)
     year = year_node.text if year_node is not None else "N/A"
 
     return journal_title, volume, issue, year, issn, journal_url, issue_url
 
-def parse_articles(xml_data):
+def parse_articles(xml_data, nsmap):
     """Extract articles with their authors, titles, pages, DOIs, and URLs from XML."""
-    articles = xml_data.xpath('//ns:journal_article', namespaces=NAMESPACE)
+    articles = xml_data.xpath('//ns:journal_article', namespaces=nsmap)
     articles_data = []
 
     for i, article in enumerate(articles, start=1):
-        title_node = article.find('ns:titles/ns:title', namespaces=NAMESPACE)
+        title_node = article.find('ns:titles/ns:title', namespaces=nsmap)
         title_text = title_node.text if title_node is not None else "N/A"
 
-        original_title_node = article.find('ns:titles/ns:original_language_title', namespaces=NAMESPACE)
+        original_title_node = article.find('ns:titles/ns:original_language_title', namespaces=nsmap)
         original_language_title = original_title_node.text if original_title_node is not None else "N/A"
 
-        authors = _contributors_display_string(article)
+        authors = _contributors_display_string(article, nsmap)
 
         # Extract pages
-        pages_node = article.find('ns:pages', namespaces=NAMESPACE)
-        first_page = pages_node.find('ns:first_page', namespaces=NAMESPACE).text if pages_node is not None and pages_node.find('ns:first_page', namespaces=NAMESPACE) is not None else "N/A"
-        last_page = pages_node.find('ns:last_page', namespaces=NAMESPACE).text if pages_node is not None and pages_node.find('ns:last_page', namespaces=NAMESPACE) is not None else "N/A"
+        pages_node = article.find('ns:pages', namespaces=nsmap)
+        first_page = pages_node.find('ns:first_page', namespaces=nsmap).text if pages_node is not None and pages_node.find('ns:first_page', namespaces=nsmap) is not None else "N/A"
+        last_page = pages_node.find('ns:last_page', namespaces=nsmap).text if pages_node is not None and pages_node.find('ns:last_page', namespaces=nsmap) is not None else "N/A"
         page_range = f"{first_page}-{last_page}" if first_page != "N/A" and last_page != "N/A" else "N/A"
 
         # Extract article DOI and URL
-        url_node = article.find('ns:doi_data/ns:resource', namespaces=NAMESPACE)
+        url_node = article.find('ns:doi_data/ns:resource', namespaces=nsmap)
         url_text = url_node.text if url_node is not None else "N/A"
 
-        doi_node = article.find('ns:doi_data/ns:doi', namespaces=NAMESPACE)
+        doi_node = article.find('ns:doi_data/ns:doi', namespaces=nsmap)
         doi_text = doi_node.text if doi_node is not None else "N/A"
 
         articles_data.append((i, authors, title_text, original_language_title, page_range, url_text, doi_text))
@@ -93,8 +101,9 @@ def create_contents_docx(xml_name, output_path, ukrainian_authors=None):
     :param ukrainian_authors: Optional list of Ukrainian authors (same order as articles_data).
     """
     xml_root = parse_xml(xml_name)
-    journal_title, volume, issue, year, _, _, _ = parse_journal_metadata(xml_root)
-    articles_data = parse_articles(xml_root)
+    nsmap = _nsmap(xml_root)
+    journal_title, volume, issue, year, _, _, _ = parse_journal_metadata(xml_root, nsmap)
+    articles_data = parse_articles(xml_root, nsmap)
 
     doc = Document()
     doc.add_paragraph("ЗМІСТ", style="Title")
@@ -126,8 +135,11 @@ def create_contents_docx(xml_name, output_path, ukrainian_authors=None):
 def create_doi_letter_docx(xml_name, output_path):
     """Generate DOI letter document with journal metadata and articles."""
     xml_root = parse_xml(xml_name)
-    journal_title, volume, issue, year, issn, journal_url, issue_url = parse_journal_metadata(xml_root)
-    articles_data = parse_articles(xml_root)
+    nsmap = _nsmap(xml_root)
+    journal_title, volume, issue, year, issn, journal_url, issue_url = parse_journal_metadata(
+        xml_root, nsmap
+    )
+    articles_data = parse_articles(xml_root, nsmap)
 
     doc = Document()
     doc.add_heading(journal_title, level=1)
