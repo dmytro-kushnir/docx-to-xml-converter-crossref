@@ -82,7 +82,7 @@ def create_xml_for_authors_with_affiliations(
     author_orcids = author_orcids or []
 
     for author_index, author in enumerate(authors_list):
-        parsed = _parse_author_name(author)
+        parsed = parse_author_name(author)
         if not parsed:
             continue
 
@@ -135,36 +135,53 @@ def create_xml_organizations_then_authors(organization_lines, authors_text, auth
     return ET.tostring(root, encoding="unicode")
 
 
-def _parse_author_name(author_str):
+_LETTER = r"A-Za-zА-ЯІЇЄҐа-яіїєґ"
+# One initial, allowing the multi-letter transliterations Ukrainian names need
+# ("Yu.", "Ya.", "Kh.", "Shch.").
+_INITIAL = rf"[{_LETTER}]{{1,4}}\."
+_INITIALS_RUN = rf"(?:{_INITIAL}\s*){{1,4}}"
+_SURNAME = rf"[{_LETTER}][{_LETTER}'\-]{{1,}}"
+
+# 'D. I. Prokopovych-Tkachenko', 'I.V. Teleshko'
+_INITIALS_FIRST_RE = re.compile(rf"^({_INITIALS_RUN})\s*({_SURNAME})$")
+# 'Tyshyk I. Y.', 'Arseniuk V.'
+_SURNAME_FIRST_RE = re.compile(rf"^({_SURNAME})[\s,]+({_INITIALS_RUN})$")
+# 'Ivan Tyshyk', 'Bybyk Roman Tarasovych'
+_FULL_NAME_RE = re.compile(
+    rf"^([A-ZА-ЯІЇЄҐ][{_LETTER}'\-]+)\s+([A-ZА-ЯІЇЄҐ][{_LETTER}'\-]+"
+    rf"(?:\s+[A-ZА-ЯІЇЄҐ][{_LETTER}'\-]+)?)$"
+)
+_INITIAL_RE = re.compile(rf"[{_LETTER}]{{1,4}}(?=\.)")
+
+
+def _normalize_initials(text):
+    """'D.I.' / 'D I' / 'Yu.Yu.' -> 'D. I.' / 'Yu. Yu.'"""
+    return " ".join(f"{initial}." for initial in _INITIAL_RE.findall(text))
+
+
+def parse_author_name(author_str):
     """Parse one copyright-line author into (given_name, surname), or None."""
     t = author_str.strip()
     if not t:
         return None
 
-    # I. V. Tyshko / I.V. Teleshko
-    m = re.match(
-        r"^([A-Za-zА-ЯІЇЄҐа-яіїєґ]\.){1,4}\s*([A-Za-zА-ЯІЇЄҐа-яіїєґ'\-]{2,})$",
-        t,
-    )
+    m = _INITIALS_FIRST_RE.match(t)
     if m:
-        return " ".join(re.findall(r"[A-Za-zА-ЯІЇЄҐа-яіїєґ]", m.group(1))), m.group(2)
+        return _normalize_initials(m.group(1)), m.group(2)
 
-    # Tyshyk I. Y. / Arseniuk V.
-    m = re.match(
-        r"^([A-Za-zА-ЯІЇЄҐа-яіїєґ'\-]{2,})\s+((?:[A-Za-zА-ЯІЇЄҐа-яіїєґ]\.\s*){1,4})$",
-        t,
-    )
+    m = _SURNAME_FIRST_RE.match(t)
     if m:
-        initials = re.findall(r"[A-Za-zА-ЯІЇЄҐа-яіїєґ]", m.group(2))
-        return " ".join(initials), m.group(1)
+        return _normalize_initials(m.group(2)), m.group(1)
 
-    # Ivan Tyshyk (full first + surname)
-    m = re.match(
-        r"^([A-Z][a-zА-ЯІЇЄҐа-яіїєґ'\-]+)\s+([A-Z][A-Za-zА-ЯІЇЄҐа-яіїєґ'\-]{1,})$",
-        t,
-    )
+    # Written out in full. Ukrainian bylines are surname-first
+    # ('Bybyk Roman Tarasovych'), English ones given-name-first ('Ivan Tyshyk'),
+    # and only the patronymic in a three-part name tells them apart.
+    m = _FULL_NAME_RE.match(t)
     if m:
-        return m.group(1), m.group(2)
+        first, rest = m.group(1), m.group(2)
+        if " " in rest:
+            return rest, first
+        return first, rest
 
     # Fallback: first token surname, rest given (legacy)
     name_parts = re.split(r"\s+", t)
@@ -181,7 +198,7 @@ def create_xml_for_authors(authors_text, author_orcids=None):
     author_orcids = author_orcids or []
 
     for author_index, author in enumerate(authors_list):
-        parsed = _parse_author_name(author)
+        parsed = parse_author_name(author)
         if not parsed:
             continue
 

@@ -3,7 +3,12 @@ from datetime import datetime
 import xml.etree.ElementTree as ET
 import lxml.etree as etree
 import yaml
-from docx_processing.extractors import sanitize_affiliation_lines_for_organization
+from docx_processing.extractors import (
+    sanitize_affiliation_lines_for_organization,
+    split_copyright_authors,
+    split_keywords,
+)
+from xml_generation.crossref.create_authors import parse_author_name
 
 # ---------- Load configuration (same style as your Crossref file) ----------
 with open("config.yml", "r", encoding="utf-8") as config_file:
@@ -46,34 +51,21 @@ def extract_doi_from_string(s: str):
 
 def parse_authors_simple(authors_text: str):
     """
-    Very tolerant author parser for strings like:
-      "Bybyk R.T., Nakonechnyi Y.M."
-      "V.S. Ivkova, I.R. Opirskyi"
-      "Kudriavtsev D.O., Mychuda L.Z."
-    Returns a list of dicts with fields: name, surname, order, role, polishAffiliation
+    Split a byline into Copernicus <author> dicts.
+
+    Uses the same name parser as the Crossref builder so both deposits credit
+    identical names; a separate, looser copy here used to emit "D S" where
+    Crossref emitted "D. S.".
     """
     authors = []
-    if not authors_text:
-        return authors
-    parts = [p.strip() for p in authors_text.split(",") if p.strip()]
-    for idx, p in enumerate(parts, 1):
-        # Pattern 1: "I.P. Surname"
-        m = re.match(r"^(([A-Za-zА-Яа-яІіЇїЄєҐґ]\.){1,3})\s+([A-Za-zА-Яа-яІіЇїЄєҐґ'\-]+)$", p)
-        if m:
-            initials = re.findall(r"[A-Za-zА-Яа-яІіЇїЄєҐґ]", m.group(1))
-            name = " ".join(initials)
-            surname = m.group(3)
-        else:
-            # Pattern 2: "Surname I.P." or "Surname I.P" or "Surname I. P."
-            tokens = p.replace(".", " ").split()
-            if not tokens:
-                continue
-            surname = tokens[0]
-            initials = [t[0] for t in tokens[1:] if t]
-            name = " ".join(initials) if initials else ""
+    for idx, part in enumerate(split_copyright_authors(authors_text), 1):
+        parsed = parse_author_name(part)
+        if not parsed:
+            continue
+        given_name, surname = parsed
         authors.append({
-            "name": name,
-            "surname": surname,
+            "name": given_name.strip(),
+            "surname": surname.strip(),
             "order": str(idx),
             "role": "AUTHOR",
             "polishAffiliation": "false"
@@ -81,10 +73,7 @@ def parse_authors_simple(authors_text: str):
     return authors
 
 def _parse_keywords_line(text: str):
-    if not text:
-        return []
-    items = [x.strip(" .;:,–—()[]") for x in re.split(r"[;,]", text) if x.strip()]
-    return [x for x in items if 0 < len(x) <= 80][:20]
+    return split_keywords(text)[:20]
 
 
 def split_multilingual_abstract_payload(abstract_text: str):
@@ -181,10 +170,17 @@ def append_language_version(parent_el, language: str, title: str, abstract_text:
         for k in keywords:
             ET.SubElement(ks, "keyword").text = k
 
-def create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text, affiliation_lines):
+def create_article_element(en_title, uk_title, authors_text, pages, refs, abstract_text,
+                           affiliation_lines, language_payload=None):
     """
     Creates one <article> node (with EN languageVersion required, optional UK languageVersion,
     <authors>, <references>). Mirrors your Crossref article builder in spirit.
+
+    language_payload: {"en_abstract", "uk_abstract", "en_keywords", "uk_keywords"}
+        from the extractors. Without it the Ukrainian abstract and both keyword
+        lists can only be recovered when the English abstract block happens to
+        carry labelled sections, which no template actually does — so every
+        Copernicus deposit went out with an empty <abstract> for uk.
     """
     start_page, end_page = pages
     doi = generate_doi(start_page)
@@ -193,8 +189,7 @@ def create_article_element(en_title, uk_title, authors_text, pages, refs, abstra
     article_el = ET.Element("article", attrib={"externalId": doi})
     ET.SubElement(article_el, "type").text = "ORIGINAL_ARTICLE"
 
-    # EN/UK languageVersion payload extracted from the shared abstract block
-    lang_payload = split_multilingual_abstract_payload(abstract_text)
+    lang_payload = language_payload or split_multilingual_abstract_payload(abstract_text)
     # If you want a predictable PDF URL, keep this; otherwise leave as None
     # pdf_url_en = f"{JOURNAL_URL}/all-volumes-and-issues/volume-{JOURNAL_VOLUME}-number-{JOURNAL_ISSUE}-{PUBLICATION_YEAR}/{slugify_title(en_title)}.pdf"
     pdf_url_en = None
@@ -240,10 +235,20 @@ def create_article_element(en_title, uk_title, authors_text, pages, refs, abstra
     return article_el
 
 # ---------- Main entrypoint (keeps your signature/name) ----------
-def create_ici_copernicus_xml(articles_data):
+def create_ici_copernicus_xml(articles_data, language_payloads=None):
     """
     Build the ICI Copernicus XML as a unicode string (same style as your Crossref create_full_xml).
+
+    language_payloads: optional list aligned with articles_data, carrying the
+        Ukrainian abstract and both keyword lists (see create_article_element).
+        Passed alongside rather than inside the tuples so the Crossref tuple
+        contract, and the page injection that rewrites it, stay unchanged.
     """
+    if language_payloads is not None and len(language_payloads) != len(articles_data):
+        raise ValueError(
+            f"language_payloads ({len(language_payloads)}) does not match "
+            f"articles_data ({len(articles_data)})"
+        )
     # Root
     root = ET.Element("ici-import")
 
@@ -255,11 +260,12 @@ def create_ici_copernicus_xml(articles_data):
     issue_el = create_issue_element()
     root.append(issue_el)
 
-    for item in articles_data:
+    for index, item in enumerate(articles_data):
         en_title, uk_title, authors_text, pages, refs, abstract_text = item[:6]
         affiliation_lines = item[6] if len(item) > 6 else []
         article_el = create_article_element(
-            en_title, uk_title, authors_text, pages, refs, abstract_text, affiliation_lines
+            en_title, uk_title, authors_text, pages, refs, abstract_text, affiliation_lines,
+            language_payload=language_payloads[index] if language_payloads else None,
         )
         issue_el.append(article_el)
 
