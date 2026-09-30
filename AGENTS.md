@@ -28,6 +28,7 @@ Converts batches of academic DOCX articles (Ukrainian/English) into:
   - `title_sequence_validator.py`: checks section sequence in DOCX (not wired into main flow)
 - `gsheet_integration/`: Google Sheets append helpers (currently unused in `main.py`)
 - `pdf_generation/`: DOCX->PDF and merge utilities (not used in main flow)
+  - `anonymize_and_convert.py`: double-blind reviewer copies (see below)
 
 ## Inputs and outputs
 - Input DOCX folder comes from `config.yml` → `app.input_folder` (or `argv[1]`); defaults to `articles/`
@@ -63,6 +64,39 @@ ROR identifier — leave `ror: ""` for a human to fill in.
 There is deliberately **no per-article override mechanism**: when a document cannot be parsed,
 the fix belongs in the source DOCX, not in config.
 
+## Anonymization (double-blind review copies)
+`pdf_generation/anonymize_and_convert.py` builds a reviewer PDF per submission. Run it as
+`python -m pdf_generation.anonymize_and_convert /path/to/articles`; output lands in
+`pdf_generation/output/anonymized_pdfs/`, named `anonymous_NNN_<title-slug>.pdf` — never after
+the source file, whose name is usually the author's surname and which LibreOffice would carry
+into the PDF name and title.
+
+Two passes, and they need opposite treatment:
+- **structural** — the author block (byline, affiliation, e-mail, ORCID, submission dates) is
+  blanked. Located by paragraph **style role** first, and by text heuristics only inside the
+  bounded author-block region (top of each language block down to its abstract, plus the
+  immediate neighbourhood of a © *byline* — not of the CC-BY notice, which sits mid-body).
+- **lexical** — every remaining mention of an author's name anywhere in the package is replaced
+  with `[anonymized]`, leaving surrounding text intact so a self-citation still reads as a
+  citation. Adjacent initials go with the name; matches must cover a whole word.
+
+Things that are easy to get wrong here, all of them regression-tested in `tests/test_anonymizer.py`:
+- Scoping is the whole game. "authors", "centre" and "university" are ordinary words: an
+  unscoped keyword rule deletes "The authors of [7] developed…" and anything about a data centre.
+- Text outranks style for content lines. Templates style a keywords line or even a title
+  `CSN: Authors Italic` — the style means "italic", not "byline".
+- `is_byline_candidate` accepts any line containing a comma. That is right at its own call site
+  but useless as a harvesting gate; the anonymizer uses its own strict `_is_name_list`.
+- `Document.paragraphs` misses table cells, text boxes, headers/footers and footnotes. Iterate
+  `w:p` elements and edit `w:t` nodes; a name straddling two runs needs the paragraph collapsed.
+- Clear the **document properties**. LibreOffice copies `author` / `last_modified_by` / `title`
+  straight into the PDF metadata, and Word fills them with the typist's full name.
+
+`python -m tests.anonymization_audit [folder]` is the corpus check, not a unit test: it
+anonymizes every real submission, then searches the result for the names, e-mails and ORCIDs the
+extractors found in the original, and exits non-zero if anything survived. Run it after touching
+either the anonymizer or the extractors, and keep it at **0 still identifying**.
+
 ## Important constraints and cautions
 - PDF page injection relies on a marker phrase in the PDF; verify matching text.
 - The PDF path in `main.py` is still a literal and is only read when `app.inject_pdf_pages` is true.
@@ -77,5 +111,8 @@ the fix belongs in the source DOCX, not in config.
   paragraph styles, patterns, and config — never from a specific author, title, or filename.
 - Author names are parsed in one place, `xml_generation/crossref/create_authors.py:parse_author_name`,
   so Crossref and Copernicus always credit identical names.
-- Run `python -m pytest` — the extraction tiers, name parsing, validator, and both XML
-  generators are covered under `tests/`.
+- Run `python -m pytest` — the extraction tiers, name parsing, validator, the anonymizer, and
+  both XML generators are covered under `tests/`.
+- Predicates shared with the anonymizer are public in `docx_processing/extractors.py`
+  (`is_byline_candidate`, `starts_with_copyright`, `looks_like_uppercase_title`,
+  `split_copyright_authors`) — reuse them instead of duplicating name logic.

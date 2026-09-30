@@ -82,7 +82,7 @@ def _looks_like_full_name_byline(text):
     )
 
 
-def _looks_like_uppercase_title(text):
+def looks_like_uppercase_title(text):
     """Mostly-uppercase heading line in either script (used to find a title)."""
     if not text or len(text) > 300:
         return False
@@ -92,7 +92,7 @@ def _looks_like_uppercase_title(text):
         or SUBMISSION_META_RE.search(text)
         or EMAIL_RE.search(text)
         or LICENSE_NOTICE_RE.search(text)
-        or _starts_with_copyright(text)
+        or starts_with_copyright(text)
     ):
         return False
     letters = [c for c in text if c.isalpha()]
@@ -145,7 +145,7 @@ LICENSE_NOTICE_RE = re.compile(
 COPYRIGHT_PREFIX_RE = re.compile(r"^[\s*_«\"'\[(]*©\s*")
 
 
-def _starts_with_copyright(text):
+def starts_with_copyright(text):
     return bool(COPYRIGHT_PREFIX_RE.match(text or ""))
 
 KEYWORDS_LINE_RE = re.compile(
@@ -379,7 +379,7 @@ def _copyright_byline_indices(paragraphs):
     return [
         i
         for i, paragraph in enumerate(paragraphs)
-        if _starts_with_copyright(paragraph)
+        if starts_with_copyright(paragraph)
         and not LICENSE_NOTICE_RE.search(paragraph)
     ]
 
@@ -434,7 +434,7 @@ def _english_header_lines_before_copyright(paragraphs, literature_references):
     lines = []
     while j < len(paragraphs):
         text = paragraphs[j]
-        if _starts_with_copyright(text):
+        if starts_with_copyright(text):
             break
         lines.append(text)
         j += 1
@@ -534,7 +534,7 @@ def _is_header_metadata_line(text):
     if not text or len(text) > 200:
         return False
     return bool(
-        _starts_with_copyright(text)
+        starts_with_copyright(text)
         or LICENSE_NOTICE_RE.search(text)
         or EMAIL_RE.search(text)
         or EMAIL_LABEL_RE.search(text)
@@ -585,9 +585,9 @@ def _parse_english_header_after_literature(paragraphs, literature_references):
     start = 0
     while start < len(between):
         line = between[start]
-        if _starts_with_copyright(line) or LICENSE_NOTICE_RE.search(line):
+        if starts_with_copyright(line) or LICENSE_NOTICE_RE.search(line):
             break
-        if _is_byline_candidate(line):
+        if is_byline_candidate(line):
             bylines.append(line)
             start += 1
             continue
@@ -600,7 +600,7 @@ def _parse_english_header_after_literature(paragraphs, literature_references):
     extra_bylines = {
         index
         for index in range(start, len(between) - 1)
-        if _is_byline_candidate(between[index])
+        if is_byline_candidate(between[index])
         and AFFILIATION_KEYWORDS_RE.search(between[index + 1])
     }
     bylines.extend(between[index] for index in sorted(extra_bylines))
@@ -611,13 +611,13 @@ def _parse_english_header_after_literature(paragraphs, literature_references):
         if index >= start
         and index not in extra_bylines
         and line.strip()
-        and not _starts_with_copyright(line)
+        and not starts_with_copyright(line)
         and not LICENSE_NOTICE_RE.search(line)
     ]
     return EnglishHeader(title, bylines, affiliations, j)
 
 
-def _is_byline_candidate(text):
+def is_byline_candidate(text):
     """True for a line that reads as an author byline in any of the templates."""
     return bool(
         _looks_like_inline_author_line(text)
@@ -653,7 +653,7 @@ def extract_ukrainian_title(paragraphs):
             # English-first layout: the Ukrainian title sits in the trailing
             # Ukrainian block instead of directly under the УДК line.
             for later in paragraphs[i + 1 :]:
-                if _has_cyrillic(later) and _looks_like_uppercase_title(later):
+                if _has_cyrillic(later) and looks_like_uppercase_title(later):
                     return str(later)
             if candidate:
                 return str(candidate)
@@ -706,11 +706,11 @@ def _reference_list_has_ended(paragraph):
     collected as references — which pushed the header block out of reach.
     """
     return bool(
-        _starts_with_copyright(paragraph)
+        starts_with_copyright(paragraph)
         or ORCID_LINE_RE.search(paragraph)
         or EMAIL_LABEL_RE.search(paragraph)
         or SUBMISSION_META_RE.search(paragraph)
-        or _looks_like_uppercase_title(paragraph)
+        or looks_like_uppercase_title(paragraph)
     )
 
 
@@ -799,9 +799,9 @@ def _bylines_under_ukrainian_title(paragraphs):
         window = paragraphs[i + 1 : i + 1 + MAX_HEADER_LINES]
         bylines = []
         for index, candidate in enumerate(window):
-            if not _has_cyrillic(candidate) or _looks_like_uppercase_title(candidate):
+            if not _has_cyrillic(candidate) or looks_like_uppercase_title(candidate):
                 continue
-            if not _is_byline_candidate(candidate):
+            if not is_byline_candidate(candidate):
                 continue
             # Either the line right under the title, or the name line heading a
             # per-author block.
@@ -851,7 +851,7 @@ def extract_abstract(paragraphs, literature_references=None, is_ukrainian=False)
             continue
         if (
             KEYWORDS_LINE_RE.match(paragraph)
-            or _starts_with_copyright(paragraph)
+            or starts_with_copyright(paragraph)
             or SECTION_HEADING_RE.match(paragraph)
         ):
             break
@@ -918,7 +918,7 @@ def _ukrainian_header_end(paragraphs):
         j = i + 1
         limit = min(len(paragraphs), j + MAX_HEADER_LINES)
         while j < limit and (
-            _looks_like_uppercase_title(paragraphs[j])
+            looks_like_uppercase_title(paragraphs[j])
             or _is_header_metadata_line(paragraphs[j])
         ):
             j += 1
