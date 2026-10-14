@@ -605,6 +605,9 @@ def _parse_english_header_after_literature(paragraphs, literature_references):
     }
     bylines.extend(between[index] for index in sorted(extra_bylines))
 
+    # Contact and editorial-date lines sit in the same block as the
+    # affiliations but are not affiliations; untemplated documents have no
+    # style to tell them apart, so they are excluded by what they contain.
     affiliations = [
         line
         for index, line in enumerate(between)
@@ -613,6 +616,10 @@ def _parse_english_header_after_literature(paragraphs, literature_references):
         and line.strip()
         and not starts_with_copyright(line)
         and not LICENSE_NOTICE_RE.search(line)
+        and not EMAIL_RE.search(line)
+        and not EMAIL_LABEL_RE.search(line)
+        and not ORCID_LINE_RE.search(line)
+        and not SUBMISSION_META_RE.search(line)
     ]
     return EnglishHeader(title, bylines, affiliations, j)
 

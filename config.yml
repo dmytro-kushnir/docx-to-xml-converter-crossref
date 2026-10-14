@@ -7,6 +7,18 @@ app:
   input_folder: ""
   output_folder: "output"
 
+submission_dates:
+  # Editorial dates written into every article's author block, in both
+  # languages, by `python -m docx_editing.add_submission_dates`.
+  # ХХ.ХХ.ХХХХ is the placeholder the template ships with: leaving a field as
+  # the placeholder means "not decided yet", and the line stays blank-looking.
+  received: "01.09.2026"
+  accepted: "14.10.2026"
+  published: "01.12.2026"
+  # Received/accepted differ per article, so a date an editor already filled in
+  # wins over the values above. Set this to replace those too.
+  overwrite_existing: false
+
 validation:
   # Refuse to write XML while any article still has a blocking defect.
   # Page ranges are only ever warnings: they stay provisional until the
@@ -110,6 +122,7 @@ depositor:
   email: "email"
 
 registrant: "registrant"
+
 license:
   url: "https://creativecommons.org/licenses/by/4.0/"
   applies_to: "vor"  # version of record (Crossref AccessIndicators)

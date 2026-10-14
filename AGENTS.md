@@ -26,6 +26,7 @@ Converts batches of academic DOCX articles (Ukrainian/English) into:
 - `docx_validation/`:
   - `article_validator.py`: pre-flight gate over the extracted records (wired into `main.py`)
   - `title_sequence_validator.py`: checks section sequence in DOCX (not wired into main flow)
+- `docx_editing/`: edits to the source DOCX themselves (see "Editorial dates")
 - `gsheet_integration/`: Google Sheets append helpers (currently unused in `main.py`)
 - `pdf_generation/`: DOCX->PDF and merge utilities (not used in main flow)
   - `anonymize_and_convert.py`: double-blind reviewer copies (see below)
@@ -63,6 +64,33 @@ ROR identifier — leave `ror: ""` for a human to fill in.
 
 There is deliberately **no per-article override mechanism**: when a document cannot be parsed,
 the fix belongs in the source DOCX, not in config.
+
+## Editorial dates
+`docx_editing/add_submission_dates.py` writes the three editorial dates into every
+article's author block, in both languages, driven by `config.yml` → `submission_dates`:
+
+    python -m docx_editing.add_submission_dates --dry-run    # report only
+    python -m docx_editing.add_submission_dates              # -> articles_with_dates/
+    python -m docx_editing.add_submission_dates --in-place   # edit the input folder
+
+It both **inserts** the block where a submission arrived without it (or with only the
+Ukrainian half) and **fills in** the `ХХ.ХХ.ХХХХ` placeholders. Insertion point and
+formatting come from the document: directly after the last contact line (e-mail / ORCID)
+above a © byline, cloning that line's `pPr`/`rPr`, so each submission keeps its own
+template. The three lines share one paragraph separated by `<w:br/>` — which is why
+`paragraph.text` renders them run together ("Received: ХХ.ХХ.ХХХХAccepted: ...").
+
+Rules that exist to avoid losing information, all regression-tested in
+`tests/test_submission_dates.py`:
+- A placeholder **never** overwrites what is already there, including a half-filled
+  `ХХ.ХХ.2026` whose year is real information.
+- A date an editor filled in outranks the issue-wide value, unless `overwrite_existing`.
+- Re-running is a no-op. This matters for `--in-place`: the backup is taken of the files
+  that are **about to change**, into a directory that is never reused, because a second
+  run that reused it would overwrite the pristine originals with already-edited copies.
+- The edit is made on the raw `word/document.xml` text and every other package part is
+  copied byte for byte, so only date paragraphs can differ. Verify with a sequence diff
+  over the paragraph lists, not a naive one — these are replacements, not just inserts.
 
 ## Anonymization (double-blind review copies)
 `pdf_generation/anonymize_and_convert.py` builds a reviewer PDF per submission. Run it as
