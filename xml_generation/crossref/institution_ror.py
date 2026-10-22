@@ -1,7 +1,33 @@
 """Map extracted affiliation lines to Crossref institution_name + ROR URL."""
 
+import os
 import re
 import unicodedata
+
+import yaml
+
+# The registry is an append-only reference table that grows every issue, so it
+# lives in its own file rather than in config.yml.
+INSTITUTIONS_FILE = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+    "institutions.yml",
+)
+
+
+def load_institutions(path=INSTITUTIONS_FILE):
+    """The id -> {name, ror, aliases?} registry, or {} when there is none.
+
+    Accepts the file either wrapped in a top-level ``institutions:`` key or as
+    the bare mapping, so moving the block out of config.yml needed no reindent.
+    """
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = yaml.safe_load(handle) or {}
+    except FileNotFoundError:
+        return {}
+    if isinstance(data, dict) and "institutions" in data:
+        data = data["institutions"] or {}
+    return data if isinstance(data, dict) else {}
 
 
 def _normalize_key(text):

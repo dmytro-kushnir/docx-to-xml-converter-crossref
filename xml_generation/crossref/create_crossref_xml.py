@@ -10,7 +10,7 @@ from xml_generation.crossref.create_authors import (
     create_xml_for_authors,
     create_xml_for_authors_with_affiliations,
 )
-from xml_generation.crossref.institution_ror import resolve_institution
+from xml_generation.crossref.institution_ror import load_institutions, resolve_institution
 from xml_generation.crossref.create_literature import create_literature_xml
 from xml_generation.crossref.create_pages import create_pages_xml
 from xml_generation.crossref.slug_utils import slugify_title
@@ -39,7 +39,7 @@ LICENSE_URL = config.get("license", {}).get(
 LICENSE_APPLIES_TO = config.get("license", {}).get("applies_to", "vor")
 CROSSREF_SCHEMA_VERSION = config.get("crossref", {}).get("schema_version", "5.4.0")
 CROSSREF_NS = f"http://www.crossref.org/schema/{CROSSREF_SCHEMA_VERSION}"
-INSTITUTIONS_CONFIG = config.get("institutions") or {}
+INSTITUTIONS_CONFIG = load_institutions()
 DEFAULT_INSTITUTION_ID = config.get("crossref", {}).get("default_institution")
 
 

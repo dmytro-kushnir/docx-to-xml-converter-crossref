@@ -196,7 +196,7 @@ def _validate_affiliation(record, institutions_config, default_institution_id):
             Finding(
                 ERROR,
                 "institution-ror",
-                f"{primary!r} is not in config.yml `institutions`, so it would be "
+                f"{primary!r} is not in institutions.yml, so it would be "
                 f"deposited as {fallback['name']!r} — add its real ROR",
             )
         )
@@ -205,7 +205,7 @@ def _validate_affiliation(record, institutions_config, default_institution_id):
             Finding(
                 WARNING,
                 "institution-ror",
-                f"{primary!r} is not in config.yml `institutions` — no ROR will be "
+                f"{primary!r} is not in institutions.yml — no ROR will be "
                 "deposited for these authors",
             )
         )
@@ -330,7 +330,7 @@ def format_institution_stub(institution_lines):
         return ""
     lines = [
         "",
-        "Add the missing ROR identifiers to config.yml `institutions`",
+        "Add the missing ROR identifiers to institutions.yml",
         "(look each one up at https://ror.org/search):",
         "",
     ]

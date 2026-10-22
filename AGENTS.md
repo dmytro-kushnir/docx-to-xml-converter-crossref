@@ -33,7 +33,10 @@ Converts batches of academic DOCX articles (Ukrainian/English) into:
 
 ## Inputs and outputs
 - Input DOCX folder comes from `config.yml` → `app.input_folder` (or `argv[1]`); defaults to `articles/`
-- Config in `config.yml` (journal metadata, DOI prefix, institutions/ROR, validation, PDF injection toggle)
+- Config in `config.yml` (journal metadata, DOI prefix, editorial dates, validation, PDF injection toggle)
+- `institutions.yml` holds the institution -> ROR registry, split out of `config.yml` because it is an
+  append-only reference table that grows every issue rather than a per-issue setting. Load it with
+  `xml_generation/crossref/institution_ror.py:load_institutions()`, never by reading `config.yml`.
 - Outputs written to `app.output_folder` (default `output/`):
   - `crossref.xml`
   - `copernicus.xml`
@@ -59,8 +62,10 @@ DOI letter / contents are built from the generated `crossref.xml` via `docx_gene
 - `WARNING` — needs a human look but is often a real gap in the source (an author with no ORCID).
   Never blocks. **Page findings are always warnings**: page ranges stay provisional until the
   typeset PDF exists.
-Unmapped affiliations are reported as a paste-ready `institutions:` YAML stub. Never invent a
-ROR identifier — leave `ror: ""` for a human to fill in.
+Unmapped affiliations are reported as a paste-ready `institutions:` YAML stub for `institutions.yml`.
+Never invent a ROR identifier — leave `ror: ""` for a human to fill in. Matching is loose (substring
+either way), so a new alias can capture another university's lines; `tests/test_institution_ror.py`
+checks every name and alias in the real file still resolves to its own entry.
 
 There is deliberately **no per-article override mechanism**: when a document cannot be parsed,
 the fix belongs in the source DOCX, not in config.

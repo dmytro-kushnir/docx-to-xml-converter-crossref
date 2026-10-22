@@ -24,6 +24,7 @@ from docx_validation.article_validator import (
     validate_articles,
 )
 from xml_generation.crossref.create_crossref_xml import create_full_xml
+from xml_generation.crossref.institution_ror import load_institutions
 from xml_generation.ici_copernicus.create_copernicus_ini_xml import create_ici_copernicus_xml
 from docx_generation.generate_docx import create_contents_docx, create_doi_letter_docx
 from pdf_processing.page_count import extract_pdf_articles_pages
@@ -35,7 +36,7 @@ DEFAULT_INPUT_FOLDER = os.path.join(os.path.dirname(os.path.abspath(__file__)), 
 INPUT_FOLDER = config.get("app", {}).get("input_folder") or DEFAULT_INPUT_FOLDER
 OUTPUT_FOLDER = config.get("app", {}).get("output_folder") or "output"
 
-INSTITUTIONS_CONFIG = config.get("institutions") or {}
+INSTITUTIONS_CONFIG = load_institutions()
 DEFAULT_INSTITUTION_ID = config.get("crossref", {}).get("default_institution")
 FAIL_ON_ERROR = config.get("validation", {}).get("fail_on_error", True)
 
@@ -116,7 +117,7 @@ if __name__ == '__main__':
     ukrainian_authors = [record.ukrainian_authors for record in records]
 
     if config["app"]["inject_pdf_pages"]:
-        pages_pdf = extract_pdf_articles_pages("/Users/dmytro.kushnir/Library/CloudStorage/OneDrive-Personal/Lecturing/2026/журнал КСМ/Volume 8 number 1/документи/ЕТАП 7 Формування УДК та подача на DOI/VSE.pdf")
+        pages_pdf = extract_pdf_articles_pages("")
         articles_data = inject_pages_into_articles(articles_data, pages_pdf)
 
     os.makedirs(OUTPUT_FOLDER, exist_ok=True)

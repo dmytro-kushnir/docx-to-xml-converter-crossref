@@ -32,75 +32,7 @@ crossref:
   # so its real ROR can be added to `institutions` below.
   default_institution: null
 
-# ROR registry URLs — used for <institution_id type="ror"> in schema 5.4.0+
-institutions:
-  lpnu:
-    name: "Lviv Polytechnic National University"
-    ror: "https://ror.org/0542q3127"
-    aliases:
-      - "Lviv Polytechnic"
-      - "National University Lviv Polytechnic"
-      # Typographic apostrophe and the Ukrainian form of the same name, both of
-      # which appear verbatim in submitted articles.
-      - "L’viv Polytechnic National University"
-      - "Національний університет «Львівська політехніка»"
-      - "Львівська політехніка"
-  grinchenko:
-    name: "Borys Grinchenko Kyiv Metropolitan University"
-    ror: "https://ror.org/01t5m8p03"
-    aliases:
-      - "Borys Grinchenko Kyiv University"
-  kai:
-    name: 'State University "Kyiv Aviation Institute"'
-    ror: "https://ror.org/01f74x078"
-    aliases:
-      - "Kyiv Aviation Institute"
-      - "National Aviation University"
-  immsp:
-    name: "Institute for Problems of Mathematical Machines and Systems National Academy of Sciences of Ukraine"
-    ror: "https://ror.org/034m0w958"
-    aliases:
-      - "Institute of Mathematical Machines and Systems Problems"
-      - "IMMSP NASU"
-  kozhedub:
-    name: "Ivan Kozhedub Kharkiv National Air Force University"
-    ror: "https://ror.org/00gyn5p04"
-    aliases:
-      - "Kharkiv National Air Force University"
-  kpi:
-    name: 'National Technical University of Ukraine "Igor Sikorsky Kyiv Polytechnic Institute"'
-    ror: "https://ror.org/00syn5v21"
-    aliases:
-      - "Igor Sikorsky Kyiv Polytechnic Institute"
-      - "Національний технічний університет України «Київський політехнічний інститут імені Ігоря Сікорського»"
-  customs_finance:
-    name: "University of Customs and Finance"
-    ror: "https://ror.org/04ft5hg27"
-    aliases:
-      - "Університет митної справи та фінансів"
-  karazin:
-    name: "V. N. Karazin Kharkiv National University"
-    ror: "https://ror.org/03ftejk10"
-    aliases:
-      - "Харківський національний університет імені В. Н. Каразіна"
-  trade_economics:
-    name: "State University of Trade and Economics"
-    ror: "https://ror.org/03r6hpz93"
-    aliases:
-      # Renamed in 2022; older submissions still use the former name.
-      - "Kyiv National University of Trade and Economics"
-      - "Державний торговельно-економічний університет"
-  chernihiv_polytechnic:
-    name: "Chernihiv Polytechnic National University"
-    ror: "https://ror.org/048mcz794"
-    aliases:
-      - "Національний університет «Чернігівська політехніка»"
-      - "Чернігівська політехніка"
-  suict:
-    name: "State University of Information and Communication Technologies"
-    ror: "https://ror.org/00fsgfk96"
-    aliases:
-      - "Державний університет інформаційно-комунікаційних технологій"
+# Institution -> ROR registry lives in institutions.yml (it grows every issue).
 
 publication:
   year: "2026"
