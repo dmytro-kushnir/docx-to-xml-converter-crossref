@@ -1,6 +1,10 @@
-from docx import Document
+import copy
 import os
+import re
+
 import lxml.etree as etree
+from docx import Document
+from docx.oxml.ns import qn
 
 def parse_xml(xml_path):
     """Parse XML file and return its root element."""
@@ -132,40 +136,157 @@ def create_contents_docx(xml_name, output_path, ukrainian_authors=None):
     print(f"Contents document saved to {output_path}")
 
 
-def create_doi_letter_docx(xml_name, output_path):
-    """Generate DOI letter document with journal metadata and articles."""
+# The DOI-registration information sheet, in the exact layout the registration
+# agency receives every issue. Generated *from* this template rather than built
+# from scratch, so fonts, column widths, borders and spacing match it exactly.
+DOI_LETTER_TEMPLATE = os.path.join(
+    os.path.dirname(os.path.abspath(__file__)), "templates", "doi_letter_template.docx"
+)
+ISSUE_LINE_RE = re.compile(r"Випуск\s*\d+.*Volume", re.DOTALL)
+
+
+def _set_text(container, text):
+    """Put `text` into the first text node under `container` and empty the rest.
+
+    Word splits a line into many runs ("Випуск ", "8", ", №", …); writing into
+    the existing nodes keeps the formatting of the line exactly as it was.
+    """
+    nodes = list(container.iter(qn("w:t")))
+    if not nodes:
+        raise ValueError("template element has no text to replace")
+    nodes[0].text = text
+    nodes[0].set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+    for node in nodes[1:]:
+        node.text = ""
+
+
+def _set_hyperlink(document, cell, url):
+    """Point the cell's hyperlink at `url` and show `url` as its text."""
+    hyperlink = next(cell._tc.iter(qn("w:hyperlink")), None)
+    if hyperlink is None:
+        _set_text(cell._tc, url)
+        return
+    rel_id = hyperlink.get(qn("r:id"))
+    document.part.rels[rel_id]._target = url
+    _set_text(hyperlink, url)
+
+
+def _initials(given_name):
+    """'D. S.' -> 'D.S.', 'Volodymyr' -> 'V.', 'Yu.' stays 'Yu.'"""
+    parts = []
+    for token in re.split(r"\s+", given_name.strip()):
+        if not token:
+            continue
+        pieces = []
+        for piece in token.split("-"):
+            pieces.append(piece if piece.endswith(".") else f"{piece[:1]}.")
+        parts.append("-".join(pieces))
+    return "".join(parts)
+
+
+def _letter_authors(article, nsmap):
+    """'D.S. Havrylov, O.P. Musienko' — initials first, as in the sheet."""
+    contributors = article.find("ns:contributors", namespaces=nsmap)
+    names = []
+    for person in contributors.findall("ns:person_name", namespaces=nsmap) if contributors is not None else []:
+        given = person.findtext("ns:given_name", default="", namespaces=nsmap).strip()
+        surname = person.findtext("ns:surname", default="", namespaces=nsmap).strip()
+        names.append(f"{_initials(given)} {surname}".strip())
+    return ", ".join(names)
+
+
+def _format_issn(issn):
+    digits = re.sub(r"[^0-9Xx]", "", issn or "")
+    return f"{digits[:4]}-{digits[4:]}" if len(digits) == 8 else issn
+
+
+def create_doi_letter_docx(
+    xml_name,
+    output_path,
+    journal_title_uk=None,
+    journal_url=None,
+    template_path=DOI_LETTER_TEMPLATE,
+):
+    """Generate the DOI-registration information sheet for the issue.
+
+    :param xml_name: Path to the generated crossref.xml.
+    :param journal_title_uk: Ukrainian title as registered; the template's own is
+        kept when not given.
+    :param journal_url: Journal home page; defaults to the one deposited in crossref.xml.
+    """
     xml_root = parse_xml(xml_name)
     nsmap = _nsmap(xml_root)
-    journal_title, volume, issue, year, issn, journal_url, issue_url = parse_journal_metadata(
+    journal_title, volume, issue, year, issn, deposited_url, issue_url = parse_journal_metadata(
         xml_root, nsmap
     )
-    articles_data = parse_articles(xml_root, nsmap)
+    abbrev = xml_root.xpath("//ns:journal_metadata/ns:abbrev_title", namespaces=nsmap)
+    abbrev_title = abbrev[0].text if abbrev else ""
+    journal_url = journal_url or deposited_url
+    articles = xml_root.xpath("//ns:journal_article", namespaces=nsmap)
 
-    doc = Document()
-    doc.add_heading(journal_title, level=1)
-    doc.add_paragraph(f"ISSN: {issn}")
-    doc.add_paragraph(f"Volume: {volume}, Issue: {issue}, Year: {year}")
-    doc.add_paragraph(f"URL: {journal_url}")
-    doc.add_paragraph(f"Contents URL: {issue_url}")
+    doc = Document(template_path)
+    issue_line = f"Випуск {volume}, №{issue}, {year} рік (Volume {volume}, Number {issue}, {year})"
 
-    # Add a table for articles
-    doc.add_paragraph("\nArticles:\n")
-    table = doc.add_table(rows=1, cols=4)
-    table.style = "Table Grid"
+    # Шапка: назви журналу й рядок випуску (у шаблоні він трапляється двічі).
+    for paragraph in doc.paragraphs:
+        text = paragraph.text.strip()
+        if ISSUE_LINE_RE.search(text):
+            _set_text(paragraph._p, issue_line)
+        elif re.fullmatch(r"\(.+\)", text):
+            _set_text(paragraph._p, f"({journal_title})")
+        elif journal_title_uk and re.fullmatch(r"“[^”]+”", text):
+            _set_text(paragraph._p, f"“{journal_title_uk}”")
+        elif journal_title_uk and text.startswith("Інформація про"):
+            quoted = [r for r in paragraph.runs if r.text.startswith("“")]
+            if quoted:
+                quoted[-1].text = f"“{journal_title_uk}”"
 
-    # Define table headers
-    hdr_cells = table.rows[0].cells
-    hdr_cells[0].text = "№"
-    hdr_cells[1].text = "Authors, Title, and URL"
-    hdr_cells[2].text = "Pages"
-    hdr_cells[3].text = "DOI"
+    # Відомості про журнал: рядок визначається за підписом у першій колонці.
+    journal_table, articles_table = doc.tables[0], doc.tables[1]
+    for row in journal_table.rows:
+        label, value = row.cells[0].text.strip(), row.cells[1]
+        if "свідоцтва" in label:
+            if journal_title_uk:
+                _set_text(value._tc, journal_title_uk)
+        elif label.startswith("Скорочена"):
+            _set_text(value._tc, abbrev_title)
+        elif "англійською" in label and "ISSN" in label:
+            _set_text(value._tc, journal_title)
+        elif label == "ISSN":
+            _set_text(value._tc, _format_issn(issn))
+        elif "стартової сторінки" in label:
+            _set_hyperlink(doc, value, journal_url)
+        elif label.startswith("Рік"):
+            _set_text(value._tc, year)
+        elif label.startswith("Число"):
+            _set_text(value._tc, f"Volume {volume}, Number {issue}")
+        elif "змісту" in label:
+            _set_hyperlink(doc, value, issue_url)
 
-    for article in articles_data:
-        row_cells = table.add_row().cells
-        row_cells[0].text = str(article[0])  # Article number
-        row_cells[1].text = f"{article[1]}. {article[2]}\n{article[5]}"  # Authors, title, and URL
-        row_cells[2].text = article[4]  # Pages
-        row_cells[3].text = article[6]  # DOI
+    # Статті: кожен рядок — копія рядка-прототипу з шаблону.
+    table = articles_table._tbl
+    data_rows = table.findall(qn("w:tr"))[1:]
+    prototype = copy.deepcopy(data_rows[0])
+    for row in data_rows:
+        table.remove(row)
+    for number, article in enumerate(articles, start=1):
+        title = article.findtext("ns:titles/ns:title", default="", namespaces=nsmap).strip()
+        url = article.findtext("ns:doi_data/ns:resource", default="", namespaces=nsmap).strip()
+        first = article.findtext("ns:pages/ns:first_page", default="", namespaces=nsmap).strip()
+        last = article.findtext("ns:pages/ns:last_page", default="", namespaces=nsmap).strip()
+        pages = f"{first}-{last}" if first and last else first
+
+        row = copy.deepcopy(prototype)
+        number_cell, text_cell, pages_cell = row.findall(qn("w:tc"))
+        _set_text(number_cell, str(number))
+        # Перший вузол — «автори. НАЗВА», останній (після розриву рядка) — URL.
+        text_nodes = list(text_cell.iter(qn("w:t")))
+        text_nodes[0].text = f"{_letter_authors(article, nsmap)}. {title.upper()}"
+        for node in text_nodes[1:-1]:
+            node.text = ""
+        text_nodes[-1].text = url
+        _set_text(pages_cell, pages)
+        table.append(row)
 
     doc.save(output_path)
     print(f"DOI Letter document saved to {output_path}")

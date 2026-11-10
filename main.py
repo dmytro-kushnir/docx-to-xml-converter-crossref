@@ -136,7 +136,12 @@ if __name__ == '__main__':
         )
 
     # Create docx documents based on XML
-    create_doi_letter_docx(crossref_path, os.path.join(OUTPUT_FOLDER, "doi_letter.docx"))
+    create_doi_letter_docx(
+        crossref_path,
+        os.path.join(OUTPUT_FOLDER, "doi_letter.docx"),
+        journal_title_uk=config.get("journal", {}).get("title_uk"),
+        journal_url=config.get("journal", {}).get("base_url"),
+    )
     create_contents_docx(crossref_path, os.path.join(OUTPUT_FOLDER, "contents_eng.docx"))
     create_contents_docx(
         crossref_path, os.path.join(OUTPUT_FOLDER, "contents_ua.docx"), ukrainian_authors

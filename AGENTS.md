@@ -53,6 +53,11 @@ Extraction produces an `ArticleRecord` (`docx_processing/article.py`). At the XM
   **alongside** the tuples as `language_payloads`, not appended to them, because
   `pdf_processing/inject_pages.py` rewrites the tuples and drops anything past index 7.
 DOI letter / contents are built from the generated `crossref.xml` via `docx_generation/generate_docx.py`.
+The DOI letter is the registration agency's information sheet and must keep its exact layout: it is
+generated **from** `docx_generation/templates/doi_letter_template.docx` (text is written into the
+template's existing runs, article rows are clones of its prototype row), never built from scratch.
+To change the layout, edit the template in Word; `tests/test_doi_letter.py` checks every generated
+row is formatted exactly like the prototype. The Ukrainian title comes from `journal.title_uk`.
 
 ## Validation gate
 `docx_validation/article_validator.py` runs before anything is written:
