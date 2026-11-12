@@ -66,3 +66,17 @@ class Crossref540Tests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class CitationNumberingTests(unittest.TestCase):
+    """A reference's own list number must not reach Crossref."""
+
+    def test_list_numbers_are_removed(self):
+        from xml_generation.crossref.create_literature import strip_list_number
+        for raw in ("1. Smith, J. (2020). Title.", "12) Smith, J. (2020). Title.", "[3] Smith, J. (2020). Title."):
+            self.assertEqual(strip_list_number(raw), "Smith, J. (2020). Title.")
+
+    def test_a_leading_year_or_name_is_kept(self):
+        from xml_generation.crossref.create_literature import strip_list_number
+        for raw in ("2016. Regulation (EU) 2016/679.", "3GPP TS 23.501. System architecture.", "5G networks survey."):
+            self.assertEqual(strip_list_number(raw), raw)

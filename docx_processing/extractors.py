@@ -115,6 +115,24 @@ ORCID_URL_RE = re.compile(
     re.IGNORECASE,
 )
 ORCID_ID_RE = re.compile(r"\b(\d{4}-\d{4}-\d{4}-\d{3}[\dX])\b", re.IGNORECASE)
+# Something an author meant as an ORCID, whether or not it is valid: a truncated
+# "0009-0006-9381-416", a placeholder "????-????-????-????". It still occupies
+# its author's position in a comma-separated list.
+ORCID_SHAPED_RE = re.compile(
+    r"^(?:https?://(?:www\.)?orcid\.org/)?[\dXx?]{4}(?:\s*-\s*[\dXx?]{1,5}){1,4}$"
+)
+
+
+def orcid_check_digit_ok(orcid):
+    """ISO 7064 11-2 check digit, as defined by ORCID."""
+    digits = re.sub(r"[^0-9Xx]", "", orcid or "").upper()
+    if not re.fullmatch(r"\d{15}[\dX]", digits):
+        return False
+    total = 0
+    for char in digits[:-1]:
+        total = (total + int(char)) * 2
+    check = (12 - total % 11) % 11
+    return digits[-1] == ("X" if check == 10 else str(check))
 SUBMISSION_META_RE = re.compile(
     r"\b(received|accepted|published)\s*:"
     r"|надійшла\s+до\s+редакції"
@@ -283,12 +301,16 @@ def extract_orcids_from_text(text):
     seen = set()
     for match in ORCID_URL_RE.finditer(text):
         url = f"https://orcid.org/{match.group(1).upper()}"
+        if not orcid_check_digit_ok(match.group(1)):
+            continue
         if url not in seen:
             seen.add(url)
             found.append(url)
     for match in ORCID_ID_RE.finditer(text):
         oid = match.group(1).upper()
         url = f"https://orcid.org/{oid}"
+        if not orcid_check_digit_ok(oid):
+            continue
         if url not in seen:
             seen.add(url)
             found.append(url)
@@ -315,23 +337,47 @@ def _segment_is_orcid_only(segment):
     return not re.search(r"[A-Za-zА-Яа-яІЇЄҐіїєґ]{2,}", remainder)
 
 
+def _without_orcid_label(segment):
+    return re.sub(r"^ORCID(?:\s*ID)?\s*:\s*", "", (segment or "").strip(), flags=re.IGNORECASE).strip()
+
+
+def _is_orcid_slot(segment):
+    """A list entry that stands for one author's ORCID, valid or broken."""
+    return _segment_is_orcid_only(segment) or bool(ORCID_SHAPED_RE.match(_without_orcid_label(segment)))
+
+
 def _line_is_comma_separated_orcid_list(text):
     parts = [p.strip() for p in text.split(",") if p.strip()]
     if not parts:
         return False
-    return all(_segment_is_orcid_only(p) for p in parts)
+    return all(_is_orcid_slot(p) for p in parts)
+
+
+def malformed_orcid_entries(text):
+    """Entries of an ORCID list that look like an ORCID but are not a valid one."""
+    if not _line_is_comma_separated_orcid_list(text or ""):
+        return []
+    return [
+        _without_orcid_label(part)
+        for part in text.split(",")
+        if part.strip() and not extract_orcids_from_text(part)
+    ]
 
 
 def extract_orcids_from_comma_separated_line(text):
-    """One ORCID per comma-separated segment, preserving list order."""
+    """One ORCID per comma-separated segment, preserving list order.
+
+    A broken entry (truncated, bad check digit, "????") yields ``None`` in its
+    own position. Dropping it instead would hand every later ORCID to the
+    previous author — exactly how a whole article's ORCIDs once shifted by one.
+    """
     orcids = []
     for part in text.split(","):
         part = part.strip()
         if not part:
             continue
         found = extract_orcids_from_text(part)
-        if found:
-            orcids.append(found[0])
+        orcids.append(found[0] if found else None)
     return orcids
 
 
@@ -401,7 +447,11 @@ def _paragraphs_after_last_reference(paragraphs, literature_references):
 
 
 def _orcids_from_lines(lines):
-    """ORCID URLs found in the given lines, de-duplicated, order preserved."""
+    """ORCID URLs found in the given lines, de-duplicated, order preserved.
+
+    ``None`` marks an author slot whose ORCID is broken in the source; it is
+    kept so the ORCIDs after it stay aligned with their authors.
+    """
     orcids = []
     seen = set()
     for line in lines:
@@ -410,7 +460,9 @@ def _orcids_from_lines(lines):
         else:
             candidates = extract_orcids_from_text(line)
         for url in candidates:
-            if url not in seen:
+            if url is None:
+                orcids.append(None)
+            elif url not in seen:
                 seen.add(url)
                 orcids.append(url)
     return orcids
@@ -465,9 +517,19 @@ def extract_author_orcids(paragraphs, literature_references):
 
     for window in windows:
         orcids = _orcids_from_lines(window)
-        if orcids:
+        if any(orcids):
             return orcids
     return []
+
+
+def extract_malformed_orcids(paragraphs):
+    """Broken ORCID entries anywhere in the article, for the validator to report."""
+    found = []
+    for paragraph in paragraphs or []:
+        for entry in malformed_orcid_entries(str(paragraph)):
+            if entry not in found:
+                found.append(entry)
+    return found
 
 
 def _styled_titles(paragraphs):

@@ -5,7 +5,9 @@ from docx_processing.extractors import (
     extract_orcids_from_comma_separated_line,
     extract_orcids_from_text,
     _line_is_comma_separated_orcid_list,
+    malformed_orcid_entries,
     normalize_orcid_url,
+    orcid_check_digit_ok,
 )
 
 
@@ -23,8 +25,8 @@ class OrcidExtractionTests(unittest.TestCase):
 
     def test_comma_separated_list_from_journal(self):
         line = (
-            "0000-0002-3156-3475, 0009-0000-5717-945X, "
-            "0000-0001-5272-8703, 0000-0002-6875-8534"
+            "0000-0002-1825-0097, 0009-0000-5717-945X, "
+            "0000-0001-5109-3700, 0000-0002-6875-8534"
         )
         self.assertTrue(_line_is_comma_separated_orcid_list(line))
         urls = extract_orcids_from_comma_separated_line(line)
@@ -34,8 +36,8 @@ class OrcidExtractionTests(unittest.TestCase):
     def test_align_four_authors(self):
         authors = "Havano O. V., Dobush P. V., Herych O. V., Shakhovska N. B."
         raw = extract_orcids_from_comma_separated_line(
-            "0000-0002-3156-3475, 0009-0000-5717-945X, "
-            "0000-0001-5272-8703, 0000-0002-6875-8534"
+            "0000-0002-1825-0097, 0009-0000-5717-945X, "
+            "0000-0001-5109-3700, 0000-0002-6875-8534"
         )
         aligned = align_author_orcids(authors, raw)
         self.assertEqual(len(aligned), 4)
@@ -43,11 +45,45 @@ class OrcidExtractionTests(unittest.TestCase):
 
     def test_inline_url_orcid(self):
         line = (
-            "Havano I. V. (https://orcid.org/0000-0002-3156-3475), Dobush A. P."
+            "Havano I. V. (https://orcid.org/0000-0002-1825-0097), Dobush A. P."
         )
         found = extract_orcids_from_text(line)
         self.assertEqual(len(found), 1)
-        self.assertEqual(found[0], "https://orcid.org/0000-0002-3156-3475")
+        self.assertEqual(found[0], "https://orcid.org/0000-0002-1825-0097")
+
+
+class BrokenOrcidTests(unittest.TestCase):
+    """A broken entry must hold its author's place, not shift everyone after it."""
+
+    AUTHORS = "Dzhaliuk N. O., Kolchenko V. V., Khoma V. V."
+
+    def test_truncated_orcid_keeps_its_position(self):
+        line = "ORCID: 0009-0006-9381-416, 0000-0002-1825-0097, 0000-0001-5109-3700"
+        self.assertTrue(_line_is_comma_separated_orcid_list(line))
+        aligned = align_author_orcids(self.AUTHORS, extract_orcids_from_comma_separated_line(line))
+        self.assertEqual(aligned, [
+            None,
+            "https://orcid.org/0000-0002-1825-0097",
+            "https://orcid.org/0000-0001-5109-3700",
+        ])
+
+    def test_placeholder_orcid_keeps_its_position(self):
+        line = "ORCID: ????-????-????-????, 0000-0002-1825-0097"
+        self.assertEqual(
+            extract_orcids_from_comma_separated_line(line),
+            [None, "https://orcid.org/0000-0002-1825-0097"],
+        )
+
+    def test_wrong_check_digit_is_rejected(self):
+        self.assertEqual(extract_orcids_from_text("0000-0002-1825-0098"), [])
+
+    def test_malformed_entries_are_reported(self):
+        line = "ORCID: 0009-0006-9381-416, 0000-0002-1825-0097, 0000-0002-1825-0098"
+        self.assertEqual(malformed_orcid_entries(line), ["0009-0006-9381-416", "0000-0002-1825-0098"])
+
+    def test_check_digit_x(self):
+        self.assertTrue(orcid_check_digit_ok("0000-0002-1694-233X"))
+        self.assertFalse(orcid_check_digit_ok("0000-0002-1694-2330"))
 
 
 if __name__ == "__main__":

@@ -14,6 +14,7 @@ from docx_processing.extractors import (
     extract_keywords,
     extract_affiliation_lines,
     extract_author_orcids,
+    extract_malformed_orcids,
     align_author_orcids,
 )
 from docx_validation.article_validator import (
@@ -62,6 +63,7 @@ def extract_article(filename, paragraphs, start_page, end_page):
             extract_authors(paragraphs, False, literature),
             extract_author_orcids(paragraphs, literature),
         ),
+        malformed_orcids=extract_malformed_orcids(paragraphs),
         template_families=template_families(paragraphs),
     )
 

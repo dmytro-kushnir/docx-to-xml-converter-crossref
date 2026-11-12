@@ -69,7 +69,7 @@ class DoiLetterTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.TemporaryDirectory()
-        xml_path = os.path.join(cls.tmp.name, "crossref.xml")
+        xml_path = os.path.join(cls.tmp.name, "CSN 8 #2.xml")
         with open(xml_path, "w", encoding="utf-8") as handle:
             handle.write(CROSSREF_XML)
         cls.output = os.path.join(cls.tmp.name, "doi_letter.docx")

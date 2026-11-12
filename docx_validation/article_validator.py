@@ -213,20 +213,29 @@ def _validate_affiliation(record, institutions_config, default_institution_id):
 
 
 def _validate_orcids(record):
-    authors = split_copyright_authors(record.authors)
-    if not authors:
-        return []
-    present = [orcid for orcid in (record.author_orcids or []) if orcid]
-    if len(present) >= len(authors):
-        return []
-    return [
+    findings = [
         Finding(
             WARNING,
             "orcid",
-            f"{len(present)} ORCID(s) for {len(authors)} author(s) — the source "
-            "document may be missing them",
+            f"ORCID «{entry}» in the source is not a valid ORCID (truncated or wrong "
+            "check digit) — its author is deposited without one; fix it in the DOCX",
         )
+        for entry in (record.malformed_orcids or [])
     ]
+    authors = split_copyright_authors(record.authors)
+    if not authors:
+        return findings
+    present = [orcid for orcid in (record.author_orcids or []) if orcid]
+    if len(present) < len(authors) and not findings:
+        findings.append(
+            Finding(
+                WARNING,
+                "orcid",
+                f"{len(present)} ORCID(s) for {len(authors)} author(s) — the source "
+                "document may be missing them",
+            )
+        )
+    return findings
 
 
 def _validate_pages(record):

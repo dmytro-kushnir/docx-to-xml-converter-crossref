@@ -27,6 +27,8 @@ class ArticleRecord:
     ukrainian_keywords: list = field(default_factory=list)
     affiliation_lines: list = field(default_factory=list)
     author_orcids: list = field(default_factory=list)
+    # ORCID entries present in the source but invalid (truncated, bad check digit).
+    malformed_orcids: list = field(default_factory=list)
     template_families: list = field(default_factory=list)
 
     @property

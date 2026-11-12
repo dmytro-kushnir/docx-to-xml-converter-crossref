@@ -47,7 +47,7 @@ journal:
     print: "27072371"
     electronic: "27072371"
   # As registered with the ISSN centre ("networks" — the deposited title had lost the "s").
-  full_title: "Computer systems and networks"
+  full_title: "Computer systems and network"
   # Ukrainian title as in the registration certificate (used in the DOI letter).
   title_uk: "Комп’ютерні системи та мережі"
   abbrev_title: "CSN"
